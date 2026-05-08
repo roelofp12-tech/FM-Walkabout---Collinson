@@ -1,0 +1,1954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>FM Walkabout Wizard — Collinson</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#07090d;--surface:#0d1117;--card:#111820;--raised:#161e28;
+  --border:#1c2535;--border2:#243040;
+  --accent:#00c8ff;--accent-dim:rgba(0,200,255,.1);--accent-glow:rgba(0,200,255,.04);
+  --warm:#ff8c42;--warm-dim:rgba(255,140,66,.12);
+  --green:#00e5a0;--green-dim:rgba(0,229,160,.1);
+  --red:#ff4455;--red-dim:rgba(255,68,85,.1);
+  --yellow:#ffd166;--text:#c8dae8;--muted:#3d5468;--faint:#1a2535;
+  --mono:'JetBrains Mono',monospace;--display:'Orbitron',sans-serif;--body:'Rajdhani',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--body);font-size:15px;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,200,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,255,.025) 1px,transparent 1px);background-size:32px 32px;pointer-events:none;z-index:0}
+
+/* HEADER */
+.hdr{position:sticky;top:0;z-index:100;background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;height:52px;display:flex;align-items:center;justify-content:space-between}
+.hdr::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent) 40%,transparent);opacity:.35}
+.hdr-logo{font-family:var(--display);font-size:13px;letter-spacing:2px;color:var(--accent)}
+.hdr-right{display:flex;gap:8px;align-items:center}
+.pill{font-family:var(--mono);font-size:10px;padding:3px 9px;border-radius:20px;border:1px solid;letter-spacing:.05em}
+.pill-blue{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.pill-warm{border-color:var(--warm);color:var(--warm);background:var(--warm-dim)}
+.pill-green{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+
+.wrap{position:relative;z-index:1;max-width:540px;margin:0 auto;padding:20px 14px 80px}
+
+/* PROGRESS */
+.progress-track{margin-bottom:20px}
+.progress-info{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.progress-zone-name{font-family:var(--display);font-size:11px;letter-spacing:1.5px;color:var(--accent)}
+.progress-count{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.progress-bar-outer{height:3px;background:var(--faint);border-radius:2px;overflow:hidden}
+.progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:2px;transition:width .4s ease}
+.zone-dots{display:flex;gap:4px;margin-top:10px;flex-wrap:wrap}
+.zone-dot{width:8px;height:8px;border-radius:50%;background:var(--faint);border:1px solid var(--border2);transition:all .3s}
+.zone-dot.done{background:var(--green);border-color:var(--green)}
+.zone-dot.active{background:var(--accent);border-color:var(--accent);box-shadow:0 0 6px var(--accent)}
+
+/* QUESTION CARD */
+.q-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:14px;animation:slideUp .25s ease}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.q-top{padding:14px 18px;background:var(--raised);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.q-step-badge{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--faint);border:1px solid var(--border2);padding:3px 8px;border-radius:4px;white-space:nowrap;letter-spacing:.04em}
+.q-zone-tag{font-family:var(--display);font-size:11px;letter-spacing:1px;color:var(--accent);flex:1}
+.q-body{padding:20px 18px}
+.q-label{font-family:var(--display);font-size:15px;letter-spacing:.5px;line-height:1.4;margin-bottom:18px;color:var(--text)}
+.q-sublabel{font-size:12px;color:var(--muted);margin-top:-12px;margin-bottom:16px;font-family:var(--mono);letter-spacing:.03em}
+
+/* PHOTO CAPTURE */
+.photo-zone{border:2px dashed var(--border2);border-radius:10px;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;cursor:pointer;transition:all .2s;overflow:hidden;position:relative;background:var(--surface);margin-bottom:14px}
+.photo-zone:hover,.photo-zone:active{border-color:var(--accent);background:var(--accent-glow)}
+.photo-zone.captured{border-style:solid;border-color:var(--green)}
+.photo-zone img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;border-radius:8px}
+.photo-zone img.show{display:block}
+.photo-prompt{text-align:center;color:var(--muted)}
+.cam-circle{width:64px;height:64px;border-radius:50%;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:26px;transition:all .2s}
+.photo-zone:hover .cam-circle{border-color:var(--accent);box-shadow:0 0 16px var(--accent-dim)}
+.photo-label{font-size:13px;letter-spacing:.04em;margin-top:4px}
+.photo-hint{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px}
+
+/* SAVED PHOTO THUMBNAIL */
+.thumb-row{display:flex;align-items:center;gap:10px;padding:8px 0;margin-bottom:10px}
+.thumb{width:56px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--border2);cursor:pointer;flex-shrink:0}
+.thumb-label{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.thumb-dl{font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;font-family:var(--mono)}
+
+/* SCAN OVERLAY */
+.scan-overlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,.7);align-items:center;justify-content:center;flex-direction:column;gap:10px;border-radius:8px;z-index:10}
+.scan-overlay.show{display:flex}
+.scan-line{width:80%;height:2px;background:var(--accent);box-shadow:0 0 8px var(--accent);animation:scanAnim 1.2s ease-in-out infinite alternate}
+@keyframes scanAnim{from{transform:translateY(-40px)}to{transform:translateY(40px)}}
+.scan-text{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.08em;animation:pulse .8s infinite alternate}
+@keyframes pulse{from{opacity:.5}to{opacity:1}}
+
+/* READING RESULT */
+.reading-result{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:none;margin-bottom:14px}
+.reading-result.show{display:flex;align-items:center;gap:14px}
+.reading-temp{font-family:var(--display);font-size:42px;letter-spacing:1px;line-height:1}
+.reading-temp.ac-col{color:var(--accent)}
+.reading-temp.room-col{color:var(--warm)}
+.reading-meta{flex:1}
+.reading-meta-label{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.06em}
+.reading-meta-edit{font-size:12px;color:var(--muted);margin-top:6px;display:flex;align-items:center;gap:6px}
+.temp-edit{background:var(--faint);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:13px;padding:4px 8px;width:80px;outline:none}
+.temp-edit:focus{border-color:var(--accent)}
+.retake-btn{background:none;border:1px solid var(--border2);border-radius:6px;padding:6px 12px;color:var(--muted);font-family:var(--mono);font-size:10px;cursor:pointer;transition:all .15s;letter-spacing:.04em}
+.retake-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* HEADCOUNT */
+.hc-row{display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:14px}
+.hc-btn{width:54px;height:54px;border-radius:50%;border:2px solid var(--border2);background:var(--raised);color:var(--text);font-size:22px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;user-select:none;font-family:var(--body)}
+.hc-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.hc-btn:active{transform:scale(.92)}
+.hc-display{font-family:var(--display);font-size:64px;letter-spacing:2px;color:var(--green);min-width:100px;text-align:center;line-height:1}
+.hc-label{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;letter-spacing:.06em;margin-bottom:10px;margin-top:-8px}
+
+/* BLINDS */
+.yn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.yn-btn{padding:18px 10px;border-radius:10px;border:2px solid var(--border2);background:var(--raised);cursor:pointer;text-align:center;transition:all .2s;font-family:var(--display);letter-spacing:.5px;font-size:14px;color:var(--muted)}
+.yn-btn .yn-icon{font-size:28px;display:block;margin-bottom:6px}
+.yn-btn:hover{border-color:var(--accent);color:var(--text)}
+.yn-btn.selected-yes{border-color:var(--yellow);color:var(--yellow);background:rgba(255,209,102,.08)}
+.yn-btn.selected-no{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+.count-grid{display:none;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;animation:slideUp .2s ease}
+.count-grid.show{display:grid}
+.count-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center}
+.count-box-label{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.06em;margin-bottom:8px}
+.count-mini-row{display:flex;align-items:center;justify-content:center;gap:8px}
+.count-mini-btn{width:32px;height:32px;border-radius:50%;border:1px solid var(--border2);background:var(--raised);color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .1s}
+.count-mini-btn:hover{border-color:var(--accent)}
+.count-num{font-family:var(--display);font-size:28px;color:var(--yellow);min-width:36px;text-align:center}
+
+/* SPECIAL STEP ITEMS */
+.special-item{background:var(--raised);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px;transition:border-color .2s}
+.special-item-title{font-size:14px;font-weight:600;margin-bottom:10px}
+.yn-small{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:0}
+.yn-small-btn{padding:10px;border:2px solid var(--border2);border-radius:6px;text-align:center;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;font-family:var(--body)}
+.yn-small-btn.s-yes{border-color:var(--red);color:var(--red);background:var(--red-dim)}
+.yn-small-btn.s-no{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+.yn-small-btn.s-fixed{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+.yn-small-btn.s-call{border-color:var(--red);color:var(--red);background:var(--red-dim)}
+.detail-section{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.detail-section.open{display:block}
+.field-label{font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px;letter-spacing:.06em}
+.txt-input{width:100%;background:var(--faint);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--body);font-size:12px;padding:7px 10px;outline:none}
+.txt-input:focus{border-color:var(--accent)}
+
+/* NEXT/BACK BUTTONS */
+.nav-row{display:flex;gap:8px;margin-top:4px}
+.next-btn{flex:1;padding:16px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),#006aff);color:#000;font-family:var(--display);font-size:14px;letter-spacing:1.5px;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.next-btn:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 6px 24px rgba(0,200,255,.25)}
+.next-btn:disabled{background:var(--faint);color:var(--muted);transform:none;box-shadow:none;cursor:not-allowed}
+.back-btn{padding:16px 18px;border-radius:10px;border:1px solid var(--border2);background:var(--raised);color:var(--muted);font-family:var(--display);font-size:13px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.back-btn:hover{border-color:var(--warm);color:var(--warm)}
+.skip-btn{width:100%;padding:10px;margin-top:8px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);font-family:var(--mono);font-size:11px;letter-spacing:.06em;cursor:pointer;transition:all .15s}
+.skip-btn:hover{border-color:var(--muted);color:var(--text)}
+
+/* REVIEW */
+.review-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:14px}
+.review-hdr{padding:12px 16px;background:var(--raised);border-bottom:1px solid var(--border);font-family:var(--display);font-size:12px;letter-spacing:1px;color:var(--accent)}
+.review-zone-row{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start}
+.review-zone-row:last-child{border-bottom:none}
+.review-zone-name{font-weight:600;font-size:13px;width:110px;flex-shrink:0;color:var(--text)}
+.review-data{flex:1;display:flex;flex-wrap:wrap;gap:6px}
+.rdchip{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;border:1px solid var(--border);color:var(--muted)}
+.rdchip.ac{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.rdchip.room{border-color:var(--warm);color:var(--warm);background:var(--warm-dim)}
+.rdchip.hc{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+.rdchip.blinds{border-color:var(--yellow);color:var(--yellow);background:rgba(255,209,102,.08)}
+
+/* SCRIPT */
+.script-out{background:#060a0e;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.script-out-hdr{padding:10px 14px;background:#0a1018;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.script-out-hdr span{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.code-block{font-family:var(--mono);font-size:11px;line-height:1.8;padding:14px 16px;color:#7ca8c0;overflow-x:auto;white-space:pre;max-height:300px;overflow-y:auto}
+.copy-btn{font-family:var(--mono);font-size:10px;padding:4px 12px;border-radius:4px;border:1px solid var(--border2);background:var(--raised);color:var(--muted);cursor:pointer;transition:all .15s}
+.copy-btn:hover{border-color:var(--accent);color:var(--accent)}
+.copy-btn.done{border-color:var(--green);color:var(--green)}
+
+/* WHATSAPP */
+.wa-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:14px}
+.wa-hdr{padding:12px 16px;background:#075e54;border-bottom:1px solid var(--border);font-family:var(--display);font-size:12px;letter-spacing:1px;color:#fff;display:flex;align-items:center;justify-content:space-between}
+.wa-body{padding:14px 16px}
+.wa-bubble{background:#dcf8c6;color:#111;border-radius:10px 10px 0 10px;padding:12px 14px;font-size:13px;line-height:1.6;white-space:pre-wrap;font-family:var(--body);word-break:break-word;margin-bottom:10px}
+.wa-time{font-size:10px;color:#555;text-align:right;margin-top:-6px;margin-bottom:10px}
+
+/* PHOTO LOG */
+.photo-log{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:14px}
+.photo-log-hdr{padding:12px 16px;background:var(--raised);border-bottom:1px solid var(--border);font-family:var(--display);font-size:11px;letter-spacing:1px;color:var(--muted)}
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px 12px}
+.photo-thumb-wrap{position:relative;border-radius:6px;overflow:hidden;aspect-ratio:4/3;cursor:pointer}
+.photo-thumb-wrap img{width:100%;height:100%;object-fit:cover}
+.photo-thumb-label{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:3px 5px;font-size:9px;font-family:var(--mono);color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.photo-thumb-dl{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.6);border-radius:3px;padding:2px 4px;font-size:9px;color:var(--accent);cursor:pointer;font-family:var(--mono)}
+
+/* REPAIRS & MAINTENANCE INPUT */
+.maint-item{background:var(--raised);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start}
+.maint-item-num{font-family:var(--display);font-size:18px;color:var(--accent);width:24px;flex-shrink:0;margin-top:2px}
+.maint-item-fields{flex:1;display:flex;flex-direction:column;gap:6px}
+.maint-cat-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px}
+.maint-cat-btn{padding:4px 10px;border:1px solid var(--border2);border-radius:4px;font-size:11px;cursor:pointer;font-family:var(--mono);background:var(--faint);color:var(--muted);transition:all .15s;white-space:nowrap}
+.maint-cat-btn.sel{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.add-maint-btn{width:100%;padding:10px;border:1px dashed var(--border2);border-radius:8px;background:none;color:var(--muted);font-family:var(--mono);font-size:11px;cursor:pointer;transition:all .15s;margin-bottom:14px}
+.add-maint-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* DAILY REPORT */
+.day-report{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:14px}
+.day-report-hdr{padding:14px 18px;background:var(--raised);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.day-report-title{font-family:var(--display);font-size:13px;letter-spacing:1px;color:var(--accent)}
+.day-report-date{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.report-section{padding:14px 18px;border-bottom:1px solid var(--border)}
+.report-section:last-child{border-bottom:none}
+.report-section-title{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.report-table{width:100%;border-collapse:collapse;font-size:12px}
+.report-table th{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:5px 8px;text-align:left;border-bottom:1px solid var(--border)}
+.report-table td{padding:7px 8px;border-bottom:1px solid var(--faint);vertical-align:top}
+.report-table tr:last-child td{border-bottom:none}
+.report-table .td-zone{font-weight:600;color:var(--text)}
+.report-table .td-ac{color:var(--accent);font-family:var(--mono);font-size:11px}
+.report-table .td-hc{color:var(--green);font-family:var(--mono);font-size:11px}
+.report-table .td-blinds{color:var(--yellow);font-family:var(--mono);font-size:11px}
+.issue-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:10px;font-family:var(--mono);margin:2px;border:1px solid}
+.issue-badge.fault{border-color:var(--red);color:var(--red);background:var(--red-dim)}
+.issue-badge.warn{border-color:var(--yellow);color:var(--yellow);background:rgba(255,209,102,.08)}
+.issue-badge.fixed{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+.issue-badge.call{border-color:var(--warm);color:var(--warm);background:var(--warm-dim)}
+.maint-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:4px;font-size:11px;margin:2px;border:1px solid var(--border2);color:var(--text);background:var(--raised)}
+.saved-days{margin-bottom:14px}
+.saved-day-row{background:var(--card);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;overflow:hidden}
+.saved-day-hdr{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:background .15s}
+.saved-day-hdr:hover{background:var(--raised)}
+.saved-day-title{font-family:var(--display);font-size:12px;letter-spacing:.5px;color:var(--text)}
+.saved-day-meta{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.saved-day-body{display:none;padding:12px 14px;border-top:1px solid var(--border);background:var(--surface)}
+.saved-day-body.open{display:block}
+
+/* DONE SCREEN */
+.done-screen{text-align:center;padding:48px 16px;display:none}
+.done-screen.show{display:block;animation:slideUp .3s ease}
+.done-icon{font-size:56px;margin-bottom:16px}
+.done-title{font-family:var(--display);font-size:22px;letter-spacing:2px;color:var(--green);margin-bottom:8px}
+.done-sub{font-size:13px;color:var(--muted);margin-bottom:24px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:12px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:7px;font-family:var(--body);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.btn-accent{background:var(--accent);color:#000}
+.btn-accent:hover{background:#00b5e8}
+.btn-outline{background:none;border:1px solid var(--border2);color:var(--text)}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+.btn-green{background:var(--green);color:#000}
+.btn-wa{background:#25d366;color:#fff}
+.btn-wa:hover{background:#1da851}
+
+input[type=file]{display:none}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:10px 22px;font-family:var(--mono);font-size:12px;letter-spacing:.04em;opacity:0;transition:all .25s;z-index:999;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.ok{border-color:var(--green);color:var(--green)}
+.toast.err{border-color:var(--red);color:var(--red)}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-logo">FM WIZARD</div>
+  <div class="hdr-right">
+    <div class="pill pill-blue" id="pillStep">START</div>
+    <div class="pill pill-warm" id="pillDate"></div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="progress-track" id="progressTrack" style="display:none">
+    <div class="progress-info">
+      <div class="progress-zone-name" id="pgZoneName">—</div>
+      <div class="progress-count" id="pgCount">0 / 0</div>
+    </div>
+    <div class="progress-bar-outer"><div class="progress-bar-fill" id="pgFill" style="width:0%"></div></div>
+    <div class="zone-dots" id="zoneDots"></div>
+  </div>
+
+  <div id="wizardArea"></div>
+
+  <div class="done-screen" id="doneScreen">
+    <div class="done-icon">✅</div>
+    <div class="done-title">WALKABOUT COMPLETE</div>
+    <div class="done-sub" id="doneSub"></div>
+    <div class="btn-row">
+      <button class="btn btn-green" onclick="showScript()">⚡ Generate Script</button>
+      <button class="btn btn-outline" onclick="showReview()">📋 Review Data</button>
+      <button class="btn btn-outline" onclick="showPhotoLog()">📷 Photo Log</button>
+    </div>
+    <div class="btn-row" id="waRow" style="display:none">
+      <button class="btn btn-wa" onclick="generateWA()">💬 Generate WhatsApp Summary</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-accent" onclick="showMaintLog()">🔧 View Maintenance Log</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-accent" onclick="saveDayReport()">💾 Save Day Report</button>
+      <button class="btn btn-outline" onclick="showDayReports()">📊 View Daily Reports</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="startOver()">↺ Start Over</button>
+    </div>
+    <div id="reviewArea"></div>
+    <div id="photoLogArea"></div>
+    <div id="waArea"></div>
+    <div id="maintArea"></div>
+    <div id="dayReportArea"></div>
+    <div id="scriptArea"></div>
+  </div>
+</div>
+
+<input type="file" id="fi-ac"   accept="image/*" capture="environment" onchange="handlePhoto(event,'ac')">
+<input type="file" id="fi-room" accept="image/*" capture="environment" onchange="handlePhoto(event,'room')">
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONFIGURATION
+// ═══════════════════════════════════════════════════════════
+const ZONES = [
+  { id:'gf',  label:'Ground Floor',    floor:'GF',  cols:{ ac:'H',  hc:'I',  blinds:'J'  } },
+  { id:'1fn', label:'1st Floor North', floor:'1F',  cols:{ ac:'K',  hc:'L',  blinds:'M'  } },
+  { id:'1fe', label:'1st Floor East',  floor:'1F',  cols:{ ac:'N',  hc:'O',  blinds:'P'  } },
+  { id:'1fs', label:'1st Floor South', floor:'1F',  cols:{ ac:'Q',  hc:'R',  blinds:'S'  } },
+  { id:'2fn', label:'2nd Floor North', floor:'2F',  cols:{ ac:'T',  hc:'U',  blinds:'V'  } },
+  { id:'2fe', label:'2nd Floor East',  floor:'2F',  cols:{ ac:'W',  hc:'X',  blinds:'Y'  } },
+  { id:'2fs', label:'2nd Floor South', floor:'2F',  cols:{ ac:'Z',  hc:'AA', blinds:'AB' } },
+  { id:'can', label:'Canteen',         floor:'ALL', cols:{ ac:'AC', hc:'AD', blinds:'AE' } },
+];
+
+const ROWS = [
+  { row:4,  time:'06:00', label:'Arrival & Setup' },
+  { row:6,  time:'08:30', label:'Building Check' },
+  { row:7,  time:'09:30', label:'Mid-Morning' },
+  { row:8,  time:'10:30', label:'Contractor Check' },
+  { row:10, time:'13:00', label:'Afternoon Rounds' },
+  { row:11, time:'14:30', label:'Cleaning Check' },
+  { row:12, time:'15:30', label:'Mid-Afternoon' },
+  { row:13, time:'16:30', label:'Contractor Sign-Off' },
+  { row:14, time:'18:20', label:'Switch Off & Close' },
+];
+
+const ZONE_STEPS = ['ac','room','hc','blinds'];
+const MAINT_CATS = ['HVAC','Electrical','Plumbing','Cleaning','Structural','Safety','General'];
+const SHEET_ID   = '1eEtwpoUJVQWQ0WXqp-IAwA62qMQnCUHqVhbtZc6KhTw';
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+let sheetRow = 4;
+let zoneIdx  = 0;
+let stepIdx  = 0;
+let phase    = 'zones';           // 'special' | 'zones'
+let specialStepIdx = 0;
+let specialSteps   = [];
+
+let data        = {};   // zone data
+let specialData = {};   // special checks
+let photos      = [];   // saved photos
+let maintItems  = [];   // repairs & maintenance log for this round
+
+// per-zone staging
+let tempAC     = null;
+let tempRoom   = null;
+let hcVal      = 0;
+let blindsOpen = false;
+let windowCount = 0;
+let blindsCount = 0;
+
+// history stack for back navigation: [{phase,zoneIdx,stepIdx,specialStepIdx}]
+let history    = [];
+
+function today() { return new Date().toISOString().slice(0,10); }
+function nowStr(){ return new Date().toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'}); }
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+function init() {
+  document.getElementById('pillDate').textContent =
+    new Date().toLocaleDateString('en-ZA',{day:'numeric',month:'short'}).toUpperCase();
+  showRowSelector();
+}
+
+// ═══════════════════════════════════════════════════════════
+// ROW SELECTOR
+// ═══════════════════════════════════════════════════════════
+function showRowSelector() {
+  document.getElementById('progressTrack').style.display = 'none';
+  document.getElementById('wizardArea').innerHTML = `
+    <div class="q-card">
+      <div class="q-top">
+        <span class="q-step-badge">SETUP</span>
+        <span class="q-zone-tag">SELECT ROUND</span>
+      </div>
+      <div class="q-body">
+        <div class="q-label">Select your time round</div>
+        <div class="q-sublabel">// Which row in the sheet are we filling?</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px">
+          ${ROWS.map(r=>`
+            <div onclick="selectRow(${r.row},this)" class="row-opt"
+              style="padding:12px;border:2px solid var(--border2);border-radius:8px;text-align:center;cursor:pointer;transition:all .15s;background:var(--raised)">
+              <div style="font-family:var(--display);font-size:10px;letter-spacing:.5px;color:var(--accent)">ROW ${r.row} &middot; ${r.time}</div>
+              <div style="font-size:12px;margin-top:4px;color:var(--text)">${r.label}</div>
+              ${r.row===6?'<div style="font-family:var(--mono);font-size:9px;color:var(--red);margin-top:3px">&#9889; BUILDING CHECK</div>':''}
+              ${r.row===8?'<div style="font-family:var(--mono);font-size:9px;color:var(--yellow);margin-top:3px">&#129494; CONTRACTORS</div>':''}
+              ${r.row===11?'<div style="font-family:var(--mono);font-size:9px;color:var(--green);margin-top:3px">&#129529; CLEANING</div>':''}
+              ${r.row===13?'<div style="font-family:var(--mono);font-size:9px;color:var(--warm);margin-top:3px">&#129494; SIGN-OFF</div>':''}
+              ${r.row===14?'<div style="font-family:var(--mono);font-size:9px;color:var(--yellow);margin-top:3px">&#128274; CLOSE + SUMMARY</div>':''}
+            </div>`).join('')}
+        </div>
+        <button class="next-btn" id="startBtn" onclick="startWizard()" disabled style="width:100%">START WALKABOUT &#8594;</button>
+      </div>
+    </div>`;
+}
+
+function selectRow(row, el) {
+  sheetRow = row;
+  document.querySelectorAll('.row-opt').forEach(e=>{ e.style.borderColor='var(--border2)'; e.style.background='var(--raised)'; });
+  el.style.borderColor = 'var(--accent)';
+  el.style.background  = 'var(--accent-dim)';
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('pillStep').textContent = 'ROW ' + row;
+}
+
+function startWizard() {
+  data={}; specialData={}; history=[]; maintItems=[];
+  zoneIdx=0; stepIdx=0; specialStepIdx=0;
+  phase = 'special';
+  specialSteps = getSpecialSteps(sheetRow);
+  document.getElementById('progressTrack').style.display = 'block';
+  renderZoneDots();
+  specialSteps.length > 0 ? renderSpecialStep() : (phase='zones', renderStep());
+}
+
+// ═══════════════════════════════════════════════════════════
+// BACK NAVIGATION
+// ═══════════════════════════════════════════════════════════
+function pushHistory() {
+  history.push({ phase, zoneIdx, stepIdx, specialStepIdx });
+}
+
+function goBack() {
+  if (history.length === 0) { startOver(); return; }
+  const prev = history.pop();
+  phase           = prev.phase;
+  zoneIdx         = prev.zoneIdx;
+  stepIdx         = prev.stepIdx;
+  specialStepIdx  = prev.specialStepIdx;
+  if (phase === 'special') renderSpecialStep();
+  else renderStep();
+}
+
+// ═══════════════════════════════════════════════════════════
+// SPECIAL STEPS
+// ═══════════════════════════════════════════════════════════
+function getSpecialSteps(row) {
+  if (row===6)  return ['breakers','lights','toilets_blocked','toilet_seats'];
+  if (row===7)  return ['lights'];
+  if (row===8)  return ['lights','contractors_yn'];
+  if (row===11) return ['cleaning_yn'];
+  if (row===13) return ['contractors_status'];
+  return [];
+}
+
+function renderSpecialStep() {
+  if (specialStepIdx >= specialSteps.length) { phase='zones'; renderStep(); return; }
+  const step  = specialSteps[specialStepIdx];
+  const total = specialSteps.length;
+  const num   = specialStepIdx + 1;
+  document.getElementById('pgZoneName').textContent = 'Special Check';
+  document.getElementById('pgCount').textContent    = `${num} / ${total}`;
+  document.getElementById('pgFill').style.width     = '5%';
+  document.getElementById('pillStep').textContent   = `ROW ${sheetRow} CHECK`;
+
+  let html = '';
+  if      (step==='breakers')          html = buildBreakersStep();
+  else if (step==='lights')            html = buildLightsStep();
+  else if (step==='toilets_blocked')   html = buildMultiCheck('toilets_blocked','&#128701; Blocked Toilets','Are there any blocked toilets?',[{id:'toilet_gf',label:'Ground Floor'},{id:'toilet_1f',label:'1st Floor'},{id:'toilet_2f',label:'2nd Floor'}]);
+  else if (step==='toilet_seats')      html = buildMultiCheck('toilet_seats','&#129681; Damaged Toilet Seats','Are there any damaged toilet seats?',[{id:'seat_gf',label:'Ground Floor'},{id:'seat_1f',label:'1st Floor'},{id:'seat_2f',label:'2nd Floor'}]);
+  else if (step==='contractors_yn')    html = buildContractorsStep();
+  else if (step==='cleaning_yn')       html = buildCleaningStep();
+  else if (step==='contractors_status')html = buildContractorStatusStep();
+
+  document.getElementById('wizardArea').innerHTML =
+    `<div class="q-card"><div class="q-top"><span class="q-step-badge">CHECK ${num} OF ${total}</span><span class="q-zone-tag">ROW ${sheetRow} SPECIAL</span></div><div class="q-body">${html}</div></div>`;
+}
+
+// ── Breakers ────────────────────────────────────────────────
+function buildBreakersStep() {
+  const items=[{id:'cb_tripped',label:'Circuit Breaker Tripped',icon:'&#9889;'},{id:'ac_tripped',label:'AC Unit Tripped',icon:'&#10052;&#65039;'}];
+  return `
+    <div class="q-label">&#9889; Circuit Breakers &amp; AC Units</div>
+    <div class="q-sublabel">// Have any tripped since last round?</div>
+    ${items.map(it=>`
+      <div class="special-item" id="br-row-${it.id}">
+        <div class="special-item-title">${it.icon} ${it.label}</div>
+        <div class="field-label">HAS IT TRIPPED?</div>
+        <div class="yn-small" style="margin-bottom:0">
+          <div class="yn-small-btn" id="br-yes-${it.id}" onclick="setBreakerYN('${it.id}','yes')">&#128997; YES</div>
+          <div class="yn-small-btn" id="br-no-${it.id}"  onclick="setBreakerYN('${it.id}','no')">&#128994; NO</div>
+        </div>
+        <div class="detail-section" id="br-det-${it.id}">
+          <div class="field-label" style="margin-top:10px">POWER / UNIT RESTORED?</div>
+          <div class="yn-small">
+            <div class="yn-small-btn" id="br-rest-yes-${it.id}" onclick="setBreakerRestored('${it.id}','yes')">&#10003; Restored</div>
+            <div class="yn-small-btn" id="br-rest-no-${it.id}"  onclick="setBreakerRestored('${it.id}','no')">&#128222; Log Call</div>
+          </div>
+          <input class="txt-input" style="margin-top:8px" placeholder="Notes — location, area affected..." id="br-note-${it.id}">
+        </div>
+      </div>`).join('')}
+    <div class="nav-row">
+      <button class="back-btn" onclick="goBack()">&#8592; Back</button>
+      <button class="next-btn" onclick="confirmBreakers()">CONFIRM &amp; NEXT &#8594;</button>
+    </div>
+    <button class="skip-btn" onclick="advanceSpecial()">Skip this check</button>`;
+}
+function setBreakerYN(id,val){
+  const y=document.getElementById('br-yes-'+id),n=document.getElementById('br-no-'+id),d=document.getElementById('br-det-'+id),r=document.getElementById('br-row-'+id);
+  y.className='yn-small-btn'+(val==='yes'?' s-yes':''); n.className='yn-small-btn'+(val==='no'?' s-no':'');
+  y.dataset.sel=val==='yes'?'1':''; n.dataset.sel=val==='no'?'1':'';
+  d.className='detail-section'+(val==='yes'?' open':''); r.style.borderColor=val==='yes'?'var(--red)':'var(--border2)';
+}
+function setBreakerRestored(id,val){
+  const y=document.getElementById('br-rest-yes-'+id),n=document.getElementById('br-rest-no-'+id);
+  y.className='yn-small-btn'+(val==='yes'?' s-fixed':''); n.className='yn-small-btn'+(val==='no'?' s-call':'');
+  y.dataset.sel=val==='yes'?'1':''; n.dataset.sel=val==='no'?'1':'';
+}
+function confirmBreakers(){
+  specialData.breakers={};
+  ['cb_tripped','ac_tripped'].forEach(id=>{
+    const tripped=document.getElementById('br-yes-'+id)?.dataset?.sel==='1';
+    const restored=document.getElementById('br-rest-yes-'+id)?.dataset?.sel==='1';
+    const logCall=document.getElementById('br-rest-no-'+id)?.dataset?.sel==='1';
+    const note=document.getElementById('br-note-'+id)?.value||'';
+    specialData.breakers[id]={tripped,restored:tripped?restored:null,logCall:tripped?logCall:false,note};
+  });
+  advanceSpecial(); showToast('Breaker check saved ✓','ok');
+}
+
+// ── Lights ──────────────────────────────────────────────────
+function buildLightsStep(){
+  const floors=[{id:'lt_gf',label:'Ground Floor'},{id:'lt_1fn',label:'1st Floor North'},{id:'lt_1fe',label:'1st Floor East'},{id:'lt_1fs',label:'1st Floor South'},{id:'lt_2fn',label:'2nd Floor North'},{id:'lt_2fe',label:'2nd Floor East'},{id:'lt_2fs',label:'2nd Floor South'},{id:'lt_can',label:'Canteen'}];
+  return `
+    <div class="q-label">&#128161; Faulty Lights</div>
+    <div class="q-sublabel">// Any faulty lights per zone?</div>
+    ${floors.map(fl=>`
+      <div class="special-item" id="lt-row-${fl.id}">
+        <div class="special-item-title">&#128161; ${fl.label}</div>
+        <div class="yn-small" style="margin-bottom:0">
+          <div class="yn-small-btn" id="lt-yes-${fl.id}" onclick="setLightYN('${fl.id}','yes')">&#128997; YES</div>
+          <div class="yn-small-btn" id="lt-no-${fl.id}"  onclick="setLightYN('${fl.id}','no')">&#128994; NO</div>
+        </div>
+        <div class="detail-section" id="lt-det-${fl.id}">
+          <div class="field-label" style="margin-top:10px">LIGHTS REPLACED / FIXED?</div>
+          <div class="yn-small">
+            <div class="yn-small-btn" id="lt-fix-yes-${fl.id}" onclick="setLightFixed('${fl.id}','yes')">&#10003; Fixed</div>
+            <div class="yn-small-btn" id="lt-fix-no-${fl.id}"  onclick="setLightFixed('${fl.id}','no')">&#128222; Log Call</div>
+          </div>
+          <input class="txt-input" style="margin-top:8px" placeholder="Notes — which lights, how many, location..." id="lt-note-${fl.id}">
+        </div>
+      </div>`).join('')}
+    <div class="nav-row">
+      <button class="back-btn" onclick="goBack()">&#8592; Back</button>
+      <button class="next-btn" onclick="confirmLights()">CONFIRM &amp; NEXT &#8594;</button>
+    </div>
+    <button class="skip-btn" onclick="advanceSpecial()">Skip this check</button>`;
+}
+function setLightYN(id,val){
+  const y=document.getElementById('lt-yes-'+id),n=document.getElementById('lt-no-'+id),d=document.getElementById('lt-det-'+id),r=document.getElementById('lt-row-'+id);
+  y.className='yn-small-btn'+(val==='yes'?' s-yes':''); n.className='yn-small-btn'+(val==='no'?' s-no':'');
+  y.dataset.sel=val==='yes'?'1':''; n.dataset.sel=val==='no'?'1':'';
+  d.className='detail-section'+(val==='yes'?' open':''); r.style.borderColor=val==='yes'?'var(--red)':'var(--border2)';
+}
+function setLightFixed(id,val){
+  const y=document.getElementById('lt-fix-yes-'+id),n=document.getElementById('lt-fix-no-'+id);
+  y.className='yn-small-btn'+(val==='yes'?' s-fixed':''); n.className='yn-small-btn'+(val==='no'?' s-call':'');
+  y.dataset.sel=val==='yes'?'1':''; n.dataset.sel=val==='no'?'1':'';
+}
+function confirmLights(){
+  const floors=['lt_gf','lt_1fn','lt_1fe','lt_1fs','lt_2fn','lt_2fe','lt_2fs','lt_can'];
+  specialData.lights={};
+  floors.forEach(id=>{
+    const faulty=document.getElementById('lt-yes-'+id)?.dataset?.sel==='1';
+    const fixed=document.getElementById('lt-fix-yes-'+id)?.dataset?.sel==='1';
+    const logCall=document.getElementById('lt-fix-no-'+id)?.dataset?.sel==='1';
+    const note=document.getElementById('lt-note-'+id)?.value||'';
+    specialData.lights[id]={faulty,fixed:faulty?fixed:null,logCall:faulty?logCall:false,note};
+  });
+  advanceSpecial(); showToast('Lights check saved ✓','ok');
+}
+
+// ── Multi Check (toilets/seats) ─────────────────────────────
+function buildMultiCheck(stepId,title,question,items){
+  return `
+    <div class="q-label">${title}</div>
+    <div class="q-sublabel">${question}</div>
+    ${items.map(it=>`
+      <div class="special-item" id="check-row-${it.id}">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div onclick="toggleCheck('${it.id}')" id="chk-${it.id}"
+            style="width:22px;height:22px;border:2px solid var(--border2);border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:14px;transition:all .15s"></div>
+          <div style="font-size:13px;font-weight:500;flex:1">${it.label}</div>
+        </div>
+        <div class="detail-section" id="action-${it.id}">
+          <div class="field-label" style="margin-top:10px">ACTION TAKEN</div>
+          <div class="yn-small">
+            <div class="yn-small-btn" id="act-rect-${it.id}" onclick="setAction('${it.id}','rectified')">&#10003; Rectified</div>
+            <div class="yn-small-btn" id="act-call-${it.id}" onclick="setAction('${it.id}','call')">&#128222; Log Call</div>
+          </div>
+          <input class="txt-input" style="margin-top:8px" placeholder="Notes..." id="note-${it.id}">
+        </div>
+      </div>`).join('')}
+    <div class="nav-row">
+      <button class="back-btn" onclick="goBack()">&#8592; Back</button>
+      <button class="next-btn" onclick='confirmMultiCheck("${stepId}",${JSON.stringify(items)})'>CONFIRM &amp; NEXT &#8594;</button>
+    </div>
+    <button class="skip-btn" onclick="advanceSpecial()">Skip this check</button>`;
+}
+function toggleCheck(id){
+  const chk=document.getElementById('chk-'+id),det=document.getElementById('action-'+id),row=document.getElementById('check-row-'+id);
+  const active=chk.textContent==='\u2713';
+  if(active){chk.textContent='';chk.style.borderColor='var(--border2)';chk.style.background='';chk.style.color='';det.className='detail-section';row.style.borderColor='var(--border2)';}
+  else{chk.textContent='\u2713';chk.style.borderColor='var(--red)';chk.style.background='var(--red-dim)';chk.style.color='var(--red)';det.className='detail-section open';row.style.borderColor='var(--red)';}
+}
+function setAction(id,action){
+  const rEl=document.getElementById('act-rect-'+id),cEl=document.getElementById('act-call-'+id);
+  rEl.className='yn-small-btn'+(action==='rectified'?' s-fixed':''); cEl.className='yn-small-btn'+(action==='call'?' s-call':'');
+  rEl.dataset.sel=action==='rectified'?'1':''; cEl.dataset.sel=action==='call'?'1':'';
+}
+function confirmMultiCheck(stepId,items){
+  if(!specialData[stepId])specialData[stepId]={};
+  items.forEach(it=>{
+    const checked=document.getElementById('chk-'+it.id)?.textContent==='\u2713';
+    const rect=document.getElementById('act-rect-'+it.id)?.dataset?.sel==='1';
+    const call=document.getElementById('act-call-'+it.id)?.dataset?.sel==='1';
+    const note=document.getElementById('note-'+it.id)?.value||'';
+    specialData[stepId][it.id]={found:checked,action:checked?(rect?'Rectified':call?'Log Call':'Noted'):'None',note};
+  });
+  advanceSpecial();
+}
+
+// ── Contractors ─────────────────────────────────────────────
+function buildContractorsStep(){
+  return `
+    <div class="q-label">&#129494; Contractors On Site?</div>
+    <div class="q-sublabel">// Are there any contractors on site right now?</div>
+    <div class="yn-row">
+      <div class="yn-btn" id="yn-yes" onclick="selectContractors(true)"><span class="yn-icon">&#129494;</span>YES</div>
+      <div class="yn-btn" id="yn-no"  onclick="selectContractors(false)"><span class="yn-icon">&#10003;</span>NO</div>
+    </div>
+    <div id="ct-wrap" style="display:none;margin-bottom:14px">
+      <div class="field-label">CONTRACTOR NAME / COMPANY</div>
+      <input class="temp-edit" id="ctName" style="width:100%;font-size:14px;padding:10px 12px;margin-bottom:10px" placeholder="Enter name or company...">
+      <div class="field-label">WORK AREA / DESCRIPTION</div>
+      <input class="temp-edit" id="ctWork" style="width:100%;font-size:14px;padding:10px 12px" placeholder="e.g. Plumbing - 2nd Floor bathrooms...">
+    </div>
+    <div class="nav-row">
+      <button class="back-btn" onclick="goBack()">&#8592; Back</button>
+      <button class="next-btn" id="nextBtn" onclick="confirmContractors()" disabled>CONFIRM &#8594;</button>
+    </div>`;
+}
+function selectContractors(yes){
+  document.getElementById('yn-yes').className='yn-btn '+(yes?'selected-yes':'');
+  document.getElementById('yn-no').className='yn-btn '+(!yes?'selected-no':'');
+  document.getElementById('ct-wrap').style.display=yes?'block':'none';
+  document.getElementById('nextBtn').disabled=false;
+}
+function confirmContractors(){
+  const yes=document.getElementById('yn-yes').classList.contains('selected-yes');
+  specialData.contractors={onSite:yes,name:document.getElementById('ctName')?.value.trim()||'',work:document.getElementById('ctWork')?.value.trim()||''};
+  advanceSpecial(); showToast(yes?'Contractors noted':'No contractors','ok');
+}
+
+// ── Cleaning ────────────────────────────────────────────────
+function buildCleaningStep(){
+  return `
+    <div class="q-label">&#129529; Cleaning Verification</div>
+    <div class="q-sublabel">// Issues with Dynamic or Resolve?</div>
+    ${['Dynamic','Resolve'].map(co=>`
+      <div class="special-item">
+        <div class="special-item-title">${co}</div>
+        <div class="yn-small">
+          <div class="yn-small-btn" id="cl-ok-${co}"    onclick="setClean('${co}','ok')">&#10003; No Issues</div>
+          <div class="yn-small-btn" id="cl-issue-${co}" onclick="setClean('${co}','issue')">&#9888; Issues</div>
+        </div>
+        <input class="txt-input" style="margin-top:8px" placeholder="Describe any issues..." id="cl-note-${co}">
+      </div>`).join('')}
+    <div class="nav-row">
+      <button class="back-btn" onclick="goBack()">&#8592; Back</button>
+      <button class="next-btn" onclick="confirmCleaning()">CONFIRM &amp; NEXT &#8594;</button>
+    </div>`;
+}
+function setClean(co,status){
+  const ok=document.getElementById('cl-ok-'+co),iss=document.getElementById('cl-issue-'+co);
+  ok.className='yn-small-btn'+(status==='ok'?' s-no':''); iss.className='yn-small-btn'+(status==='issue'?' s-yes':'');
+  ok.dataset.sel=status==='ok'?'1':''; iss.dataset.sel=status==='issue'?'1':'';
+}
+function confirmCleaning(){
+  specialData.cleaning={};
+  ['Dynamic','Resolve'].forEach(co=>{
+    specialData.cleaning[co]={issues:document.getElementById('cl-issue-'+co)?.dataset?.sel==='1',note:document.getElementById('cl-note-'+co)?.value||''};
+  });
+  advanceSpecial(); showToast('Cleaning check saved','ok');
+}
+
+// ── Contractor Status ────────────────────────────────────────
+function buildContractorStatusStep(){
+  const had=specialData?.contractors?.onSite;
+  const name=specialData?.contractors?.name||'Contractors';
+  if(!had){ setTimeout(()=>advanceSpecial(),200); return `<div style="color:var(--muted);text-align:center;padding:24px;font-family:var(--mono);font-size:12px">No contractors logged at Row 8 — skipping...</div>`; }
+  return `
+    <div class="q-label">&#129494; Contractor Status</div>
+    <div class="q-sublabel">// Earlier: <strong style="color:var(--yellow)">${name}</strong></div>
+    <div class="yn-row">
+      <div class="yn-btn" id="yn-still" onclick="setCtStatus('still')"><span class="yn-icon">&#129494;</span>STILL ON SITE</div>
+      <div class="yn-btn" id="yn-left"  onclick="setCtStatus('left')"><span class="yn-icon">&#128682;</span>HAVE LEFT</div>
+    </div>
+    <div id="ct-left-wrap" style="display:none;margin-bottom:14px">
+      <div class="field-label">DEPARTURE TIME</div>
+      <input class="temp-edit" id="ctDepartTime" style="width:100%;font-size:14px;padding:10px 12px;margin-bottom:8px" placeholder="e.g. 15:45">
+      <div class="field-label">NOTES</div>
+      <input class="temp-edit" id="ctDepartNote" style="width:100%;font-size:14px;padding:10px 12px" placeholder="Work completed, any outstanding issues...">
+    </div>
+    <div id="ct-still-wrap" style="display:none;margin-bottom:14px">
+      <div class="field-label">PROGRESS NOTES</div>
+      <input class="temp-edit" id="ctStillNote" style="width:100%;font-size:14px;padding:10px 12px" placeholder="Progress update, expected completion...">
+    </div>
+    <div class="nav-row">
+      <button class="back-btn" onclick="goBack()">&#8592; Back</button>
+      <button class="next-btn" id="nextBtn" onclick="confirmCtStatus()" disabled>CONFIRM &#8594;</button>
+    </div>`;
+}
+function setCtStatus(s){
+  document.getElementById('yn-still').className='yn-btn '+(s==='still'?'selected-yes':'');
+  document.getElementById('yn-left').className='yn-btn '+(s==='left'?'selected-no':'');
+  document.getElementById('ct-left-wrap').style.display=s==='left'?'block':'none';
+  document.getElementById('ct-still-wrap').style.display=s==='still'?'block':'none';
+  document.getElementById('nextBtn').disabled=false;
+}
+function confirmCtStatus(){
+  const left=document.getElementById('yn-left')?.classList.contains('selected-no');
+  specialData.contractorStatus={status:left?'left':'still on site',departTime:document.getElementById('ctDepartTime')?.value||'',departNote:document.getElementById('ctDepartNote')?.value||'',stillNote:document.getElementById('ctStillNote')?.value||''};
+  advanceSpecial(); showToast('Contractor status saved','ok');
+}
+
+function advanceSpecial(){
+  pushHistory();
+  specialStepIdx++;
+  if(specialStepIdx>=specialSteps.length){phase='zones';renderStep();}
+  else renderSpecialStep();
+}
+
+// ═══════════════════════════════════════════════════════════
+// ZONE DOTS + PROGRESS
+// ═══════════════════════════════════════════════════════════
+function renderZoneDots(){
+  document.getElementById('zoneDots').innerHTML=ZONES.map((z,i)=>{
+    const cls=i<zoneIdx?'done':i===zoneIdx?'active':'';
+    return `<div class="zone-dot ${cls}" title="${z.label}"></div>`;
+  }).join('');
+}
+function updateProgress(){
+  const total=ZONES.length*ZONE_STEPS.length, done=zoneIdx*ZONE_STEPS.length+stepIdx;
+  document.getElementById('pgFill').style.width=Math.round(done/total*100)+'%';
+  document.getElementById('pgZoneName').textContent=ZONES[zoneIdx]?.label||'Done';
+  document.getElementById('pgCount').textContent=`Zone ${zoneIdx+1} / ${ZONES.length}`;
+  document.getElementById('pillStep').textContent=`${ZONES[zoneIdx]?.floor||''} STEP ${stepIdx+1}/${ZONE_STEPS.length}`;
+  renderZoneDots();
+}
+
+// ═══════════════════════════════════════════════════════════
+// ZONE STEPS
+// ═══════════════════════════════════════════════════════════
+function renderStep(){
+  if(zoneIdx>=ZONES.length){finishAll();return;}
+  const zone=ZONES[zoneIdx], step=ZONE_STEPS[stepIdx];
+  updateProgress();
+  const labels={ac:`Step ${stepIdx+1}/4 — AC Setting`,room:`Step ${stepIdx+1}/4 — Room Temp`,hc:`Step ${stepIdx+1}/4 — Headcount`,blinds:`Step ${stepIdx+1}/4 — Windows & Blinds`};
+  const hdr=`<div class="q-top"><span class="q-step-badge">${labels[step]}</span><span class="q-zone-tag">${zone.label.toUpperCase()}</span></div>`;
+  let body='';
+  if(step==='ac'){tempAC=null; body=buildPhotoStep('ac','&#128247; Take photo of the AC display','Point camera at the AC control panel',`Column ${zone.cols.ac}, Row ${sheetRow}`,'ac');}
+  else if(step==='room'){tempRoom=null; body=buildPhotoStep('room','&#127777;&#65039; Take photo of the room thermometer','Point camera at the room sensor / thermometer',`Combined &#8594; Column ${zone.cols.ac}, Row ${sheetRow}`,'room');}
+  else if(step==='hc'){hcVal=0; body=buildHCStep(zone);}
+  else if(step==='blinds'){blindsOpen=false;windowCount=0;blindsCount=0; body=buildBlindsStep(zone);}
+  document.getElementById('wizardArea').innerHTML=`<div class="q-card">${hdr}<div class="q-body">${body}</div></div>`;
+
+  // restore saved photo thumbnails if going back
+  if(step==='ac'||step==='room'){
+    const savedPhoto=photos.find(p=>p.zone===zone.id&&p.row===sheetRow&&p.type===step);
+    if(savedPhoto){
+      const img=document.getElementById('pimg-'+step);
+      if(img){img.src=savedPhoto.b64;img.classList.add('show');}
+      const prompt=document.getElementById('pprompt-'+step); if(prompt)prompt.style.display='none';
+      const pzone=document.getElementById('pzone-'+step); if(pzone)pzone.classList.add('captured');
+    }
+  }
+  if(step==='ac'&&data[zone.id]?.acTemp!==undefined)showPhotoResult('ac',data[zone.id].acTemp);
+  if(step==='room'&&data[zone.id]?.roomTemp!==undefined)showPhotoResult('room',data[zone.id].roomTemp);
+  if(step==='hc'&&data[zone.id]?.hc!==undefined){hcVal=data[zone.id].hc;const el=document.getElementById('hcNum');if(el)el.textContent=hcVal;const btn=document.querySelector('.next-btn');if(btn)btn.textContent='CONFIRM '+hcVal+' STAFF \u2192';}
+  if(step==='blinds'&&data[zone.id]?.blindsStr){
+    const saved=data[zone.id];
+    if(saved.blindsOpen!==undefined){
+      blindsOpen=saved.blindsOpen; windowCount=saved.windowCount||0; blindsCount=saved.blindsCount||0;
+      selectYN(blindsOpen);
+      if(blindsOpen){document.getElementById('wCount').textContent=windowCount;document.getElementById('bCount').textContent=blindsCount;}
+    }
+  }
+}
+
+function buildPhotoStep(type,label,hint,colRef,photoType){
+  return `
+    <div class="q-label">${label}</div>
+    <div class="q-sublabel">// &#8594; ${colRef}</div>
+    <div class="photo-zone" id="pzone-${type}" onclick="triggerPhoto('${photoType}')">
+      <img id="pimg-${type}" alt="">
+      <div class="scan-overlay" id="scan-${type}"><div class="scan-line"></div><div class="scan-text">READING DISPLAY...</div></div>
+      <div class="photo-prompt" id="pprompt-${type}">
+        <div class="cam-circle">&#128247;</div>
+        <div class="photo-label">TAP TO CAPTURE</div>
+        <div class="photo-hint">${hint}</div>
+      </div>
+    </div>
+    <div class="reading-result" id="result-${type}">
+      <div class="reading-temp ${type==='ac'?'ac-col':'room-col'}" id="rtemp-${type}">—</div>
+      <div class="reading-meta">
+        <div class="reading-meta-label">${type==='ac'?'AC SET TEMP (°C)':'ROOM TEMP (°C)'}</div>
+        <div class="reading-meta-edit">
+          <span style="color:var(--muted);font-size:10px">Edit:</span>
+          <input class="temp-edit" type="number" step="0.1" id="tedit-${type}" oninput="manualTemp('${type}',this.value)">
+          <button class="retake-btn" onclick="triggerPhoto('${photoType}')">&#8634; Retake</button>
+        </div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="back-btn" onclick="goBack()">&#8592; Back</button>
+      <button class="next-btn" id="nextBtn" onclick="nextStep()" disabled>NEXT &#8594;</button>
+    </div>
+    <button class="skip-btn" onclick="skipStep()">Skip this zone</button>`;
+}
+
+function buildHCStep(zone){
+  return `
+    <div class="q-label">How many staff are present?</div>
+    <div class="q-sublabel">// &#8594; Column ${zone.cols.hc}, Row ${sheetRow}</div>
+    <div class="hc-label">STAFF COUNT</div>
+    <div class="hc-row">
+      <button class="hc-btn" onclick="adjustHC(-5)">-5</button>
+      <button class="hc-btn" onclick="adjustHC(-1)">-</button>
+      <div class="hc-display" id="hcNum">0</div>
+      <button class="hc-btn" onclick="adjustHC(1)">+</button>
+      <button class="hc-btn" onclick="adjustHC(5)">+5</button>
+    </div>
+    <div class="nav-row">
+      <button class="back-btn" onclick="goBack()">&#8592; Back</button>
+      <button class="next-btn" onclick="confirmHC()">CONFIRM 0 STAFF &#8594;</button>
+    </div>
+    <button class="skip-btn" onclick="skipStep()">Skip this entry</button>`;
+}
+
+function buildBlindsStep(zone){
+  return `
+    <div class="q-label">Open windows or blinds?</div>
+    <div class="q-sublabel">// &#8594; Column ${zone.cols.blinds}, Row ${sheetRow}</div>
+    <div class="yn-row">
+      <div class="yn-btn" id="yn-yes" onclick="selectYN(true)"><span class="yn-icon">&#129695;</span>YES</div>
+      <div class="yn-btn" id="yn-no"  onclick="selectYN(false)"><span class="yn-icon">&#10003;</span>NO, ALL CLOSED</div>
+    </div>
+    <div class="count-grid" id="countGrid">
+      <div class="count-box">
+        <div class="count-box-label">WINDOWS OPEN</div>
+        <div class="count-mini-row">
+          <button class="count-mini-btn" onclick="adjustCount('w',-1)">-</button>
+          <div class="count-num" id="wCount">0</div>
+          <button class="count-mini-btn" onclick="adjustCount('w',1)">+</button>
+        </div>
+      </div>
+      <div class="count-box">
+        <div class="count-box-label">BLINDS OPEN</div>
+        <div class="count-mini-row">
+          <button class="count-mini-btn" onclick="adjustCount('b',-1)">-</button>
+          <div class="count-num" id="bCount">0</div>
+          <button class="count-mini-btn" onclick="adjustCount('b',1)">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="back-btn" onclick="goBack()">&#8592; Back</button>
+      <button class="next-btn" id="nextBtn" onclick="confirmBlinds()" disabled>CONFIRM &#8594;</button>
+    </div>
+    <button class="skip-btn" onclick="skipStep()">Skip this entry</button>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHOTO HANDLING — saves b64 to photos array
+// ═══════════════════════════════════════════════════════════
+function triggerPhoto(type){document.getElementById('fi-'+type).click();}
+
+async function handlePhoto(event,type){
+  const file=event.target.files[0]; if(!file)return;
+  event.target.value='';
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const b64full=e.target.result;
+    const b64=b64full.split(',')[1];
+    const img=document.getElementById('pimg-'+type);
+    if(img){img.src=b64full;img.classList.add('show');}
+    const pr=document.getElementById('pprompt-'+type); if(pr)pr.style.display='none';
+    const pz=document.getElementById('pzone-'+type); if(pz)pz.classList.add('captured');
+
+    // Save photo
+    const zone=ZONES[zoneIdx];
+    const existing=photos.findIndex(p=>p.zone===zone.id&&p.row===sheetRow&&p.type===type);
+    const photoEntry={id:Date.now(),type,zone:zone.id,zoneLabel:zone.label,row:sheetRow,b64:b64full,timestamp:nowStr()};
+    if(existing>=0)photos[existing]=photoEntry; else photos.push(photoEntry);
+
+    const scanEl=document.getElementById('scan-'+type);
+    if(scanEl)scanEl.classList.add('show');
+
+    try{
+      const temp=await readTempFromPhoto(b64,type);
+      if(scanEl)scanEl.classList.remove('show');
+      showPhotoResult(type,temp);
+      if(type==='ac')tempAC=temp;
+      if(type==='room')tempRoom=temp;
+      enableNext();
+      showToast((type==='ac'?'AC':'Room')+': '+temp+'°C ✓','ok');
+    }catch(err){
+      if(scanEl)scanEl.classList.remove('show');
+      showPhotoResult(type,null);
+      showToast('Photo saved — enter temperature manually','ok');
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function readTempFromPhoto(b64,type){
+  const isAC=type==='ac';
+  const prompt=isAC
+    ?'This is an AC/aircon control panel. Return ONLY the numeric SET POINT temperature as a number like 24.0. No units. If two numbers pick the SET POINT. Valid range 10-40. If unreadable reply: UNREADABLE'
+    :'This is a room thermometer/sensor. Return ONLY the numeric ACTUAL room temperature as a number like 23.1. No units. If two numbers pick the CURRENT reading. Valid range 10-40. If unreadable reply: UNREADABLE';
+  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:20,messages:[{role:'user',content:[
+      {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},{type:'text',text:prompt}]}]})});
+  if(!res.ok)throw new Error('api');
+  const d=await res.json();
+  const raw=d.content?.map(c=>c.text||'').join('').trim();
+  if(!raw||raw==='UNREADABLE')throw new Error('unreadable');
+  const n=parseFloat(raw.replace(/[^0-9.]/g,''));
+  if(isNaN(n)||n<10||n>40)throw new Error('range');
+  return Math.round(n*10)/10;
+}
+
+function showPhotoResult(type,temp){
+  const r=document.getElementById('result-'+type),t=document.getElementById('rtemp-'+type),e=document.getElementById('tedit-'+type);
+  if(!r)return; r.classList.add('show');
+  if(temp!==null){t.textContent=temp+'°C';t.style.color='';if(e)e.value=temp;}
+  else{t.textContent='?';t.style.color='var(--red)';if(e){e.value='';e.focus();}}
+}
+function manualTemp(type,val){
+  const n=parseFloat(val);
+  if(!isNaN(n)&&n>=10&&n<=40){
+    if(type==='ac'){tempAC=Math.round(n*10)/10;const el=document.getElementById('rtemp-ac');if(el)el.textContent=tempAC+'°C';}
+    if(type==='room'){tempRoom=Math.round(n*10)/10;const el=document.getElementById('rtemp-room');if(el)el.textContent=tempRoom+'°C';}
+    enableNext();
+  }
+}
+function enableNext(){const b=document.getElementById('nextBtn');if(b)b.disabled=false;}
+
+// ── Download a saved photo ──────────────────────────────────
+function downloadPhoto(photoId){
+  const ph=photos.find(p=>p.id===photoId); if(!ph)return;
+  const a=document.createElement('a');
+  a.href=ph.b64;
+  a.download=`${ph.zoneLabel.replace(/\s/g,'_')}_Row${ph.row}_${ph.type}_${ph.timestamp.replace(':','')}.jpg`;
+  a.click();
+  showToast('Photo downloaded ✓','ok');
+}
+
+// ═══════════════════════════════════════════════════════════
+// HEADCOUNT + BLINDS
+// ═══════════════════════════════════════════════════════════
+function adjustHC(delta){
+  hcVal=Math.max(0,hcVal+delta);
+  const el=document.getElementById('hcNum');if(el)el.textContent=hcVal;
+  const btn=document.querySelector('.next-btn');if(btn)btn.textContent='CONFIRM '+hcVal+' STAFF \u2192';
+}
+function confirmHC(){
+  const zone=ZONES[zoneIdx];if(!data[zone.id])data[zone.id]={};
+  data[zone.id].hc=hcVal; advance();
+}
+function selectYN(yes){
+  blindsOpen=yes;
+  const yEl=document.getElementById('yn-yes'),nEl=document.getElementById('yn-no'),cg=document.getElementById('countGrid');
+  if(yEl)yEl.className='yn-btn '+(yes?'selected-yes':'');
+  if(nEl)nEl.className='yn-btn '+(!yes?'selected-no':'');
+  if(cg)cg.className='count-grid '+(yes?'show':'');
+  const nb=document.getElementById('nextBtn');if(nb)nb.disabled=false;
+  if(!yes){windowCount=0;blindsCount=0;}
+}
+function adjustCount(which,delta){
+  if(which==='w'){windowCount=Math.max(0,windowCount+delta);document.getElementById('wCount').textContent=windowCount;}
+  if(which==='b'){blindsCount=Math.max(0,blindsCount+delta);document.getElementById('bCount').textContent=blindsCount;}
+}
+function confirmBlinds(){
+  const zone=ZONES[zoneIdx];if(!data[zone.id])data[zone.id]={};
+  data[zone.id].blindsOpen=blindsOpen;data[zone.id].windowCount=windowCount;data[zone.id].blindsCount=blindsCount;
+  const parts=[];
+  if(!blindsOpen){data[zone.id].blindsStr='NONE';}
+  else{
+    if(windowCount>0)parts.push(windowCount+' WINDOW'+(windowCount>1?'S':''));
+    if(blindsCount>0)parts.push(blindsCount+' BLIND'+(blindsCount>1?'S':''));
+    data[zone.id].blindsStr=parts.join(', ')||'OPEN';
+  }
+  advance();
+}
+
+// ═══════════════════════════════════════════════════════════
+// ADVANCE / BACK
+// ═══════════════════════════════════════════════════════════
+function nextStep(){
+  const zone=ZONES[zoneIdx];if(!data[zone.id])data[zone.id]={};
+  const step=ZONE_STEPS[stepIdx];
+  if(step==='ac')data[zone.id].acTemp=tempAC;
+  if(step==='room'){
+    data[zone.id].roomTemp=tempRoom;
+    const ac=data[zone.id].acTemp??'?',rm=data[zone.id].roomTemp??'?';
+    data[zone.id].acNote='AC SET '+ac+'°C | ROOM '+rm+'°C';
+  }
+  advance();
+}
+function skipStep(){advance();}
+function advance(){
+  pushHistory();
+  stepIdx++;
+  if(stepIdx>=ZONE_STEPS.length){stepIdx=0;zoneIdx++;showToast((ZONES[zoneIdx-1]?.label||'Zone')+' saved ✓','ok');}
+  renderStep();
+}
+
+// ═══════════════════════════════════════════════════════════
+// FINISH — show maintenance entry before done screen
+// ═══════════════════════════════════════════════════════════
+function finishAll(){
+  document.getElementById('progressTrack').style.display='none';
+  // Show maintenance entry step
+  document.getElementById('wizardArea').innerHTML=buildMaintenanceStep();
+}
+
+// ═══════════════════════════════════════════════════════════
+// REPAIRS & MAINTENANCE STEP
+// ═══════════════════════════════════════════════════════════
+function buildMaintenanceStep(){
+  const cats=[
+    {id:'hvac',       label:'HVAC / Aircon',  icon:'❄️', col:'#00c8ff'},
+    {id:'electrical', label:'Electrical',      icon:'⚡', col:'#ffd166'},
+    {id:'plumbing',   label:'Plumbing',        icon:'🚿', col:'#60a5fa'},
+    {id:'cleaning',   label:'Cleaning',        icon:'🧹', col:'#00e5a0'},
+    {id:'structural', label:'Structural',      icon:'🏗️', col:'#ff8c42'},
+    {id:'safety',     label:'Safety',          icon:'⚠️', col:'#ff4455'},
+    {id:'general',    label:'General',         icon:'🔧', col:'#3d5468'},
+  ];
+  return `<div class="q-card">
+    <div class="q-top">
+      <span class="q-step-badge">FINAL STEP</span>
+      <span class="q-zone-tag">REPAIRS &amp; MAINTENANCE</span>
+    </div>
+    <div class="q-body">
+      <div class="q-label">🔧 Repairs &amp; Maintenance</div>
+      <div class="q-sublabel">// Tap a category to log items — each has its own section</div>
+      ${cats.map(cat=>`
+        <div style="background:var(--raised);border:1px solid var(--border2);border-radius:10px;margin-bottom:8px;overflow:hidden">
+          <div onclick="toggleMaintCat('${cat.id}')"
+            style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer">
+            <span style="font-size:18px">${cat.icon}</span>
+            <span style="font-family:var(--display);font-size:12px;letter-spacing:.5px;color:${cat.col};flex:1">${cat.label}</span>
+            <span id="maint-count-${cat.id}" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-right:6px"></span>
+            <span id="maint-arrow-${cat.id}" style="color:var(--muted);font-size:13px">▾</span>
+          </div>
+          <div id="maint-body-${cat.id}" style="display:none;padding:0 14px 12px">
+            <div id="maint-items-${cat.id}"></div>
+            <button onclick="addMaintItem('${cat.id}')"
+              style="width:100%;padding:8px;border:1px dashed var(--border2);border-radius:6px;background:none;
+                     color:${cat.col};font-family:var(--mono);font-size:11px;cursor:pointer;margin-top:4px;transition:border-color .15s"
+              onmouseover="this.style.borderColor='${cat.col}'" onmouseout="this.style.borderColor='var(--border2)'">
+              + Add ${cat.label} Item
+            </button>
+          </div>
+        </div>`).join('')}
+      <div class="nav-row" style="margin-top:12px">
+        <button class="back-btn" onclick="goBack()">← Back</button>
+        <button class="next-btn" onclick="completeMaintenance()">FINISH &amp; SAVE →</button>
+      </div>
+      <button class="skip-btn" onclick="completeMaintenance()">Skip — no maintenance this round</button>
+    </div>
+  </div>`;
+}
+
+function toggleMaintCat(catId){
+  const body=document.getElementById('maint-body-'+catId);
+  const arrow=document.getElementById('maint-arrow-'+catId);
+  if(!body)return;
+  const open=body.style.display==='none';
+  body.style.display=open?'block':'none';
+  if(arrow)arrow.textContent=open?'▴':'▾';
+  if(open && maintItems.filter(m=>m.category===catId).length===0) addMaintItem(catId);
+}
+
+function addMaintItem(catId){
+  maintItems.push({id:Date.now(),category:catId,description:'',status:'done',notes:''});
+  renderMaintCat(catId);
+  const body=document.getElementById('maint-body-'+catId);
+  const arrow=document.getElementById('maint-arrow-'+catId);
+  if(body)body.style.display='block';
+  if(arrow)arrow.textContent='▴';
+}
+
+function renderMaintCat(catId){
+  const el=document.getElementById('maint-items-'+catId);
+  if(!el)return;
+  const items=maintItems.filter(m=>m.category===catId);
+  const countEl=document.getElementById('maint-count-'+catId);
+  if(countEl)countEl.textContent=items.length>0?items.length+' item'+(items.length!==1?'s':''):'';
+  if(items.length===0){el.innerHTML='';return;}
+  const statuses=[
+    {s:'done',label:'✅ Completed'},{s:'pending',label:'⏳ Pending'},
+    {s:'logged',label:'📞 Call Logged'},{s:'contractor',label:'🦺 Contractor'}
+  ];
+  el.innerHTML=items.map((item,li)=>{
+    const gi=maintItems.indexOf(item);
+    return `<div style="background:var(--faint);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.08em;margin-bottom:6px">ITEM ${li+1}</div>
+      <input class="txt-input" style="margin-bottom:6px" placeholder="Description — what was done or reported..."
+        value="${item.description.replace(/"/g,'&quot;')}" oninput="maintItems[${gi}].description=this.value">
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
+        ${statuses.map(opt=>`
+          <div onclick="setMaintStatus(${gi},'${opt.s}','${catId}')"
+            style="padding:5px 10px;border:1px solid ${item.status===opt.s?'var(--accent)':'var(--border2)'};border-radius:4px;
+                   font-size:11px;cursor:pointer;font-family:var(--mono);transition:all .15s;
+                   background:${item.status===opt.s?'var(--accent-dim)':'var(--faint)'};
+                   color:${item.status===opt.s?'var(--accent)':'var(--muted)'}">${opt.label}</div>`).join('')}
+      </div>
+      <input class="txt-input" placeholder="Additional notes..." value="${item.notes.replace(/"/g,'&quot;')}"
+        oninput="maintItems[${gi}].notes=this.value">
+      <div style="text-align:right;margin-top:6px">
+        <span onclick="removeMaintItem(${gi},'${catId}')"
+          style="font-family:var(--mono);font-size:10px;color:var(--red);cursor:pointer;letter-spacing:.04em">✕ Remove</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderMaintList(){
+  ['hvac','electrical','plumbing','cleaning','structural','safety','general'].forEach(c=>renderMaintCat(c));
+}
+
+function setMaintCat(i,cat){ maintItems[i].category=cat; renderMaintList(); }
+function setMaintStatus(i,s,catId){ maintItems[i].status=s; renderMaintCat(catId); }
+function removeMaintItem(i,catId){ maintItems.splice(i,1); renderMaintCat(catId); }
+
+function completeMaintenance(){
+  document.getElementById('wizardArea').innerHTML='';
+  document.getElementById('doneScreen').classList.add('show');
+  document.getElementById('doneSub').textContent=
+    Object.keys(data).length+' of '+ZONES.length+' zones · Row '+sheetRow+' · '+
+    photos.length+' photos · '+maintItems.length+' maintenance item'+(maintItems.length!==1?'s':'')+' logged.';
+  document.getElementById('pillStep').textContent='DONE';
+  if(sheetRow===14)document.getElementById('waRow').style.display='flex';
+}
+
+function startOver(){
+  data={};specialData={};photos=[];history=[];maintItems=[];
+  zoneIdx=0;stepIdx=0;specialStepIdx=0;phase='zones';specialSteps=[];
+  document.getElementById('doneScreen').classList.remove('show');
+  ['reviewArea','photoLogArea','waArea','maintArea','dayReportArea','scriptArea'].forEach(id=>{
+    const el=document.getElementById(id); if(el)el.innerHTML='';
+  });
+  const wr=document.getElementById('waRow'); if(wr)wr.style.display='none';
+  showRowSelector();
+}
+
+// ═══════════════════════════════════════════════════════════
+// REVIEW
+// ═══════════════════════════════════════════════════════════
+function showReview(){
+  document.getElementById('reviewArea').innerHTML=`
+    <div class="review-card" style="margin-top:16px">
+      <div class="review-hdr">CAPTURED DATA — ROW ${sheetRow}</div>
+      ${ZONES.map(z=>{
+        const d=data[z.id]||{};
+        return `<div class="review-zone-row">
+          <div class="review-zone-name">${z.label}</div>
+          <div class="review-data">
+            ${d.acNote?`<span class="rdchip ac">❄ ${d.acNote}</span>`:'<span class="rdchip">AC —</span>'}
+            ${d.hc!==undefined?`<span class="rdchip hc">👥 ${d.hc}</span>`:'<span class="rdchip">HC —</span>'}
+            ${d.blindsStr?`<span class="rdchip blinds">🪟 ${d.blindsStr}</span>`:'<span class="rdchip">Blinds —</span>'}
+          </div>
+        </div>`;
+      }).join('')}
+      ${maintItems.length>0?`
+        <div class="review-zone-row">
+          <div class="review-zone-name" style="color:var(--warm)">🔧 Maintenance</div>
+          <div class="review-data">
+            ${maintItems.map(m=>`<span class="rdchip" style="border-color:var(--warm);color:var(--warm)">${m.category}: ${m.description.slice(0,30)||'—'}</span>`).join('')}
+          </div>
+        </div>`:''
+      }
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAINTENANCE LOG — separate card per category
+// ═══════════════════════════════════════════════════════════
+function showMaintLog(){
+  const el = document.getElementById('maintArea');
+  if(!el) return;
+
+  const cats = [
+    {id:'hvac',       label:'HVAC / Aircon',  icon:'❄️', col:'#00c8ff'},
+    {id:'electrical', label:'Electrical',      icon:'⚡', col:'#ffd166'},
+    {id:'plumbing',   label:'Plumbing',        icon:'🚿', col:'#60a5fa'},
+    {id:'cleaning',   label:'Cleaning',        icon:'🧹', col:'#00e5a0'},
+    {id:'structural', label:'Structural',      icon:'🏗️', col:'#ff8c42'},
+    {id:'safety',     label:'Safety',          icon:'⚠️', col:'#ff4455'},
+    {id:'general',    label:'General',         icon:'🔧', col:'#8b9eb0'},
+  ];
+
+  const statusLabel = {done:'✅ Completed', pending:'⏳ Pending', logged:'📞 Call Logged', contractor:'🦺 Contractor'};
+  const statusCol   = {done:'var(--green)', pending:'var(--yellow)', logged:'var(--warm)', contractor:'var(--accent)'};
+
+  // Build one card per category that has items
+  const catCards = cats.map(cat => {
+    const items = maintItems.filter(m => m.category === cat.id);
+    return `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:10px">
+        <!-- Category Header -->
+        <div style="padding:11px 16px;background:var(--raised);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+          <span style="font-size:18px">${cat.icon}</span>
+          <span style="font-family:var(--display);font-size:12px;letter-spacing:.5px;color:${cat.col};flex:1">${cat.label}</span>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">${items.length} item${items.length!==1?'s':''}</span>
+        </div>
+        <!-- Items -->
+        <div style="padding:12px 16px">
+          ${items.length === 0
+            ? `<div style="font-size:12px;color:var(--muted);font-family:var(--mono);text-align:center;padding:10px 0">No ${cat.label.toLowerCase()} items logged this round.</div>`
+            : items.map((item, i) => `
+              <div style="padding:10px 12px;background:var(--raised);border-radius:7px;margin-bottom:6px;border-left:2px solid ${cat.col}">
+                <div style="font-size:13px;font-weight:600;margin-bottom:5px">${item.description || '(No description entered)'}</div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="font-size:11px;font-family:var(--mono);color:${statusCol[item.status]||'var(--muted)'};
+                    padding:2px 8px;border-radius:4px;border:1px solid ${statusCol[item.status]||'var(--border2)'}">
+                    ${statusLabel[item.status]||item.status}
+                  </span>
+                  ${item.notes ? `<span style="font-size:11px;color:var(--muted)">${item.notes}</span>` : ''}
+                </div>
+              </div>`).join('')
+          }
+        </div>
+      </div>`;
+  }).join('');
+
+  const totalItems = maintItems.length;
+
+  el.innerHTML = `
+    <div style="margin-top:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-family:var(--display);font-size:13px;letter-spacing:1px;color:var(--accent)">
+          🔧 MAINTENANCE LOG — ROW ${sheetRow}
+        </div>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">${totalItems} total item${totalItems!==1?'s':''}</span>
+      </div>
+      ${totalItems === 0
+        ? `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:28px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px">
+             No maintenance items logged this round.
+           </div>`
+        : catCards
+      }
+    </div>`;
+
+  el.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHOTO LOG
+// ═══════════════════════════════════════════════════════════
+function showPhotoLog(){
+  if(photos.length===0){
+    document.getElementById('photoLogArea').innerHTML=`<div class="photo-log" style="margin-top:16px"><div class="photo-log-hdr">PHOTO LOG</div><div style="padding:20px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px">No photos saved yet.</div></div>`;
+    return;
+  }
+  const thumbs=photos.map(p=>`
+    <div class="photo-thumb-wrap">
+      <img src="${p.b64}" onclick="downloadPhoto(${p.id})" title="Tap to download">
+      <div class="photo-thumb-label">${p.zoneLabel} · ${p.type==='ac'?'AC':'Room'}</div>
+      <div class="photo-thumb-dl" onclick="downloadPhoto(${p.id})">↓</div>
+    </div>`).join('');
+  document.getElementById('photoLogArea').innerHTML=`
+    <div class="photo-log" style="margin-top:16px">
+      <div class="photo-log-hdr">PHOTO LOG — ${photos.length} photo${photos.length!==1?'s':''} saved &nbsp;·&nbsp;
+        <span style="cursor:pointer;color:var(--accent)" onclick="downloadAllPhotos()">Download all</span>
+      </div>
+      <div class="photo-grid">${thumbs}</div>
+    </div>`;
+}
+function downloadAllPhotos(){ photos.forEach((p,i)=>setTimeout(()=>downloadPhoto(p.id),i*300)); }
+
+// ═══════════════════════════════════════════════════════════
+// DAILY REPORT — SAVE & VIEW
+// ═══════════════════════════════════════════════════════════
+function getDayReports(){
+  try{ return JSON.parse(localStorage.getItem('fm_day_reports')||'[]'); }catch(e){ return []; }
+}
+function saveDayReports(reports){
+  // Strip b64 photos from saved reports to save space — keep metadata only
+  localStorage.setItem('fm_day_reports', JSON.stringify(reports));
+}
+
+function saveDayReport(){
+  const reports=getDayReports();
+  const dateStr=today();
+  const timeStr=nowStr();
+  const rowInfo=ROWS.find(r=>r.row===sheetRow)||{time:'?',label:'?'};
+
+  // Build issues list from specialData
+  const issues=[];
+  if(specialData.breakers){
+    ['cb_tripped','ac_tripped'].forEach(id=>{
+      const b=specialData.breakers[id];
+      if(b?.tripped) issues.push({type:'fault',area:'Electrical',desc:(id==='cb_tripped'?'Circuit Breaker':'AC Unit')+' tripped',action:b.restored?'Restored':'Call logged',note:b.note||''});
+    });
+  }
+  if(specialData.lights){
+    Object.entries(specialData.lights).forEach(([id,lt])=>{
+      if(lt?.faulty){
+        const zoneName=ZONES.find(z=>'lt_'+z.id===id)?.label||id;
+        issues.push({type:'fault',area:'Electrical',desc:'Faulty lights — '+zoneName,action:lt.fixed?'Fixed':'Call logged',note:lt.note||''});
+      }
+    });
+  }
+  if(specialData.toilets_blocked){
+    Object.entries(specialData.toilets_blocked).forEach(([id,t])=>{
+      if(t?.found) issues.push({type:'fault',area:'Plumbing',desc:'Blocked toilet — '+id.replace('toilet_','').toUpperCase(),action:t.action,note:t.note||''});
+    });
+  }
+  if(specialData.toilet_seats){
+    Object.entries(specialData.toilet_seats).forEach(([id,t])=>{
+      if(t?.found) issues.push({type:'warn',area:'Facilities',desc:'Damaged toilet seat — '+id.replace('seat_','').toUpperCase(),action:t.action,note:t.note||''});
+    });
+  }
+  if(specialData.cleaning){
+    ['Dynamic','Resolve'].forEach(co=>{
+      const c=specialData.cleaning[co];
+      if(c?.issues) issues.push({type:'warn',area:'Cleaning',desc:'Cleaning issue — '+co,action:'Noted',note:c.note||''});
+    });
+  }
+
+  // Headcount summary per zone per round
+  const hcSummary={};
+  ZONES.forEach(z=>{ const d=data[z.id]; if(d?.hc!==undefined) hcSummary[z.label]=d.hc; });
+
+  // Windows & blinds summary
+  const blindsSummary=[];
+  ZONES.forEach(z=>{
+    const d=data[z.id];
+    if(d?.blindsOpen){
+      blindsSummary.push({zone:z.label,windows:d.windowCount||0,blinds:d.blindsCount||0});
+    }
+  });
+
+  // Contractor info
+  const contractors=specialData.contractors?.onSite?{
+    name:specialData.contractors.name,
+    work:specialData.contractors.work,
+    status:specialData.contractorStatus?.status||'on site'
+  }:null;
+
+  const round={
+    row:sheetRow,
+    time:rowInfo.time,
+    label:rowInfo.label,
+    capturedAt:timeStr,
+    zones:JSON.parse(JSON.stringify(data)),
+    issues,
+    hcSummary,
+    blindsSummary,
+    maintenance:JSON.parse(JSON.stringify(maintItems)),
+    contractors,
+    photoCount:photos.length
+  };
+
+  // Find or create today's report
+  const existingIdx=reports.findIndex(r=>r.date===dateStr);
+  if(existingIdx>=0){
+    // Add or replace this round
+    const existing=reports[existingIdx];
+    const roundIdx=existing.rounds.findIndex(r=>r.row===sheetRow);
+    if(roundIdx>=0) existing.rounds[roundIdx]=round; else existing.rounds.push(round);
+    existing.rounds.sort((a,b)=>a.row-b.row);
+    reports[existingIdx]=existing;
+  } else {
+    reports.unshift({date:dateStr,rounds:[round],inspector:''});
+  }
+
+  saveDayReports(reports);
+  showToast('Day report saved ✓','ok');
+  showDayReports();
+}
+
+function showDayReports(){
+  const reports=getDayReports();
+  const el=document.getElementById('dayReportArea');
+  if(!el)return;
+
+  if(reports.length===0){
+    el.innerHTML=`<div class="day-report" style="margin-top:16px"><div class="day-report-hdr"><span class="day-report-title">DAILY REPORTS</span></div><div style="padding:20px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px">No reports saved yet. Complete a round and tap Save Day Report.</div></div>`;
+    return;
+  }
+
+  const reportsHtml=reports.map((report,ri)=>`
+    <div class="saved-day-row">
+      <div class="saved-day-hdr" onclick="toggleDayReport(${ri})">
+        <div>
+          <div class="saved-day-title">${formatDate(report.date)}</div>
+          <div class="saved-day-meta">${report.rounds.length} round${report.rounds.length!==1?'s':''} · ${report.rounds.reduce((s,r)=>s+r.issues.length,0)} issues · ${report.rounds.reduce((s,r)=>s+r.maintenance.length,0)} maintenance items</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="copy-btn" onclick="event.stopPropagation();exportDayReport(${ri})">Export</button>
+          <button class="copy-btn" onclick="event.stopPropagation();deleteDayReport(${ri})" style="border-color:var(--red);color:var(--red)">Delete</button>
+          <span id="day-arrow-${ri}" style="color:var(--muted);font-size:14px">▾</span>
+        </div>
+      </div>
+      <div class="saved-day-body" id="day-body-${ri}">
+        ${renderDayReportBody(report)}
+      </div>
+    </div>`).join('');
+
+  el.innerHTML=`
+    <div style="margin-top:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-family:var(--display);font-size:13px;letter-spacing:1px;color:var(--accent)">DAILY REPORTS</div>
+        <button class="btn btn-outline" style="font-size:11px;padding:6px 12px" onclick="showWeeklySummary()">📈 Weekly Summary</button>
+      </div>
+      <div class="saved-days">${reportsHtml}</div>
+    </div>`;
+}
+
+function renderDayReportBody(report){
+  const allIssues=report.rounds.flatMap(r=>r.issues);
+  const allMaint=report.rounds.flatMap(r=>r.maintenance);
+  const allContractors=report.rounds.filter(r=>r.contractors).map(r=>r.contractors);
+
+  // Build headcount table across rounds
+  const roundLabels=report.rounds.map(r=>`Row ${r.row}<br><span style="font-size:9px;color:var(--muted)">${r.time}</span>`);
+  const hcTableRows=ZONES.map(z=>{
+    const cells=report.rounds.map(r=>{
+      const hc=r.hcSummary[z.label];
+      return `<td style="text-align:center;font-family:var(--mono);font-size:12px;color:var(--green)">${hc!==undefined?hc:'—'}</td>`;
+    }).join('');
+    return `<tr><td class="td-zone">${z.label}</td>${cells}</tr>`;
+  }).join('');
+
+  // Blinds & windows per round
+  const blindsRows=report.rounds.map(r=>{
+    if(!r.blindsSummary||r.blindsSummary.length===0) return `<div style="font-size:12px;color:var(--muted)">Row ${r.row} ${r.time}: All closed ✓</div>`;
+    return r.blindsSummary.map(b=>`<div style="font-size:12px;margin-bottom:3px"><span style="color:var(--yellow)">Row ${r.row} ${r.time} · ${b.zone}:</span> ${b.windows} window${b.windows!==1?'s':''}, ${b.blinds} blind${b.blinds!==1?'s':''} open</div>`).join('');
+  }).join('');
+
+  return `
+    <!-- HEADCOUNT TABLE -->
+    <div class="report-section">
+      <div class="report-section-title">👥 Headcount Per Zone Per Round</div>
+      <div style="overflow-x:auto">
+        <table class="report-table">
+          <thead><tr>
+            <th>Zone</th>
+            ${report.rounds.map(r=>`<th style="text-align:center">${roundLabels[report.rounds.indexOf(r)]}</th>`).join('')}
+          </thead>
+          <tbody>${hcTableRows}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- WINDOWS & BLINDS -->
+    <div class="report-section">
+      <div class="report-section-title">🪟 Windows &amp; Blinds Open</div>
+      ${blindsRows||'<div style="font-size:12px;color:var(--muted)">No open windows or blinds recorded.</div>'}
+    </div>
+
+    <!-- ISSUES & FAULTS -->
+    <div class="report-section">
+      <div class="report-section-title">⚠️ Issues &amp; Faults (${allIssues.length})</div>
+      ${allIssues.length===0
+        ?'<div style="font-size:12px;color:var(--green)">✓ No issues logged today.</div>'
+        :allIssues.map(iss=>`
+          <div style="margin-bottom:8px;padding:8px 10px;background:var(--faint);border-radius:6px;border-left:2px solid ${iss.type==='fault'?'var(--red)':'var(--yellow)'}">
+            <div style="font-size:12px;font-weight:600">${iss.area} — ${iss.desc}</div>
+            <div style="font-size:11px;margin-top:3px">
+              <span class="issue-badge ${iss.action==='Restored'||iss.action==='Fixed'?'fixed':iss.action==='Call logged'||iss.action==='Log Call'?'call':iss.type}">${iss.action}</span>
+              ${iss.note?`<span style="color:var(--muted);font-size:11px;margin-left:6px">${iss.note}</span>`:''}
+            </div>
+          </div>`).join('')
+      }
+    </div>
+
+    <!-- REPAIRS & MAINTENANCE -->
+    <div class="report-section">
+      <div class="report-section-title">🔧 Repairs &amp; Maintenance (${allMaint.length})</div>
+      ${allMaint.length===0
+        ?'<div style="font-size:12px;color:var(--muted)">No maintenance items logged today.</div>'
+        :allMaint.map(m=>`
+          <div style="margin-bottom:8px;padding:8px 10px;background:var(--faint);border-radius:6px;border-left:2px solid var(--warm)">
+            <div style="font-size:12px;font-weight:600">${m.category} — ${m.description||'(No description)'}</div>
+            <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">
+              <span class="issue-badge ${m.status==='done'?'fixed':m.status==='pending'?'warn':m.status==='logged'?'call':'fault'}">${m.status==='done'?'Completed':m.status==='pending'?'Pending':m.status==='logged'?'Call Logged':'Contractor'}</span>
+              ${m.notes?`<span style="color:var(--muted);font-size:11px">${m.notes}</span>`:''}
+            </div>
+          </div>`).join('')
+      }
+    </div>
+
+    <!-- CONTRACTORS -->
+    ${allContractors.length>0?`
+    <div class="report-section">
+      <div class="report-section-title">🦺 Contractors</div>
+      ${allContractors.map(ct=>`
+        <div style="font-size:12px;margin-bottom:4px">
+          <strong>${ct.name}</strong> — ${ct.work}
+          <span class="issue-badge ${ct.status==='left'?'fixed':'warn'}" style="margin-left:6px">${ct.status}</span>
+        </div>`).join('')}
+    </div>`:''}
+
+    <!-- AC TEMPERATURES -->
+    <div class="report-section">
+      <div class="report-section-title">❄️ AC &amp; Room Temperatures (Last Captured)</div>
+      ${ZONES.map(z=>{
+        // Find last round with AC data for this zone
+        for(let i=report.rounds.length-1;i>=0;i--){
+          const d=report.rounds[i].zones[z.id];
+          if(d?.acNote) return `<div style="font-size:12px;margin-bottom:3px"><span style="color:var(--accent);font-family:var(--mono)">${z.label}:</span> <span style="color:var(--text)">${d.acNote}</span></div>`;
+        }
+        return `<div style="font-size:12px;color:var(--muted);margin-bottom:3px">${z.label}: not recorded</div>`;
+      }).join('')}
+    </div>`;
+}
+
+function toggleDayReport(i){
+  const body=document.getElementById('day-body-'+i);
+  const arrow=document.getElementById('day-arrow-'+i);
+  if(!body)return;
+  const open=body.classList.toggle('open');
+  if(arrow)arrow.textContent=open?'▴':'▾';
+}
+
+function deleteDayReport(i){
+  if(!confirm('Delete this day\'s report? This cannot be undone.'))return;
+  const reports=getDayReports();
+  reports.splice(i,1);
+  saveDayReports(reports);
+  showDayReports();
+  showToast('Report deleted','ok');
+}
+
+function exportDayReport(i){
+  const reports=getDayReports();
+  const report=reports[i];
+  if(!report)return;
+  const allIssues=report.rounds.flatMap(r=>r.issues);
+  const allMaint=report.rounds.flatMap(r=>r.maintenance);
+  const L=[];
+  L.push('COLLINSON FM — DAILY REPORT');
+  L.push('Date: '+formatDate(report.date));
+  L.push('Rounds completed: '+report.rounds.length);
+  L.push('');
+  L.push('═══ HEADCOUNT ═══');
+  report.rounds.forEach(r=>{
+    L.push('Row '+r.row+' ('+r.time+' '+r.label+'):');
+    ZONES.forEach(z=>{ const hc=r.hcSummary[z.label]; L.push('  '+z.label+': '+(hc!==undefined?hc:'—')); });
+  });
+  L.push('');
+  L.push('═══ WINDOWS & BLINDS ═══');
+  report.rounds.forEach(r=>{
+    if(r.blindsSummary?.length>0) r.blindsSummary.forEach(b=>L.push('Row '+r.row+' '+r.time+' · '+b.zone+': '+b.windows+' windows, '+b.blinds+' blinds open'));
+    else L.push('Row '+r.row+' '+r.time+': All closed');
+  });
+  L.push('');
+  L.push('═══ ISSUES & FAULTS ('+allIssues.length+') ═══');
+  allIssues.length===0?L.push('No issues logged.'):allIssues.forEach(iss=>L.push('• ['+iss.type.toUpperCase()+'] '+iss.area+' — '+iss.desc+' | Action: '+iss.action+(iss.note?' | '+iss.note:'')));
+  L.push('');
+  L.push('═══ REPAIRS & MAINTENANCE ('+allMaint.length+') ═══');
+  allMaint.length===0?L.push('No maintenance logged.'):allMaint.forEach(m=>L.push('• ['+m.status.toUpperCase()+'] '+m.category+' — '+(m.description||'No description')+(m.notes?' | '+m.notes:'')));
+  L.push('');
+  L.push('═══ AC & ROOM TEMPERATURES ═══');
+  ZONES.forEach(z=>{
+    for(let i=report.rounds.length-1;i>=0;i--){
+      const d=report.rounds[i].zones[z.id];
+      if(d?.acNote){L.push(z.label+': '+d.acNote);return;}
+    }
+    L.push(z.label+': Not recorded');
+  });
+
+  const blob=new Blob([L.join('\n')],{type:'text/plain'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='FM_DailyReport_'+report.date+'.txt';a.click();
+  showToast('Report exported ✓','ok');
+}
+
+function formatDate(str){
+  return new Date(str+'T00:00:00').toLocaleDateString('en-ZA',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+
+// ═══════════════════════════════════════════════════════════
+// WEEKLY SUMMARY
+// ═══════════════════════════════════════════════════════════
+function showWeeklySummary(){
+  const reports=getDayReports();
+  const el=document.getElementById('dayReportArea');
+  if(!el)return;
+
+  // Get last 7 days
+  const now=new Date();
+  const weekAgo=new Date(now-7*86400000);
+  const weekReports=reports.filter(r=>new Date(r.date+'T00:00:00')>=weekAgo);
+
+  if(weekReports.length===0){
+    el.innerHTML=`<div class="day-report" style="margin-top:16px">
+      <div class="day-report-hdr"><span class="day-report-title">WEEKLY SUMMARY</span></div>
+      <div style="padding:20px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px">No reports in the last 7 days.</div>
+    </div>`;
+    return;
+  }
+
+  const allRounds=weekReports.flatMap(r=>r.rounds);
+  const allIssues=allRounds.flatMap(r=>r.issues);
+  const allMaint=allRounds.flatMap(r=>r.maintenance);
+
+  // Total headcount per zone across whole week
+  const weekHC={};
+  ZONES.forEach(z=>{
+    weekHC[z.label]=allRounds.reduce((s,r)=>{
+      const hc=r.hcSummary?.[z.label];
+      return s+(hc!==undefined?hc:0);
+    },0);
+  });
+  const totalHC=Object.values(weekHC).reduce((a,b)=>a+b,0);
+
+  // Issues breakdown
+  const issueCats={};
+  allIssues.forEach(iss=>{ issueCats[iss.area]=(issueCats[iss.area]||0)+1; });
+
+  // Maintenance breakdown
+  const maintCats={};
+  allMaint.forEach(m=>{ maintCats[m.category]=(maintCats[m.category]||0)+1; });
+
+  // Most open blinds/windows days
+  const openBlindsCount=allRounds.reduce((s,r)=>s+(r.blindsSummary?.length||0),0);
+  const totalWindows=allRounds.reduce((s,r)=>s+(r.blindsSummary?.reduce((a,b)=>a+b.windows,0)||0),0);
+  const totalBlinds=allRounds.reduce((s,r)=>s+(r.blindsSummary?.reduce((a,b)=>a+b.blinds,0)||0),0);
+
+  // Recurring issues
+  const issueFreq={};
+  allIssues.forEach(iss=>{ const k=iss.area+': '+iss.desc; issueFreq[k]=(issueFreq[k]||0)+1; });
+  const recurring=Object.entries(issueFreq).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  el.innerHTML=`
+    <div class="day-report" style="margin-top:16px">
+      <div class="day-report-hdr">
+        <span class="day-report-title">📈 WEEKLY SUMMARY</span>
+        <span class="day-report-date">${weekReports.length} days · ${allRounds.length} rounds</span>
+      </div>
+
+      <!-- STATS ROW -->
+      <div class="report-section">
+        <div class="report-section-title">At a Glance</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
+          ${[
+            {val:weekReports.length,label:'Days Logged',col:'var(--accent)'},
+            {val:allRounds.length,label:'Rounds Done',col:'var(--accent)'},
+            {val:totalHC,label:'Total Staff Interactions',col:'var(--green)'},
+            {val:allIssues.length,label:'Issues Found',col:'var(--red)'},
+            {val:allMaint.length,label:'Maintenance Items',col:'var(--warm)'},
+            {val:totalWindows+totalBlinds,label:'Open Blinds/Windows',col:'var(--yellow)'},
+          ].map(s=>`
+            <div style="background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-family:var(--display);font-size:28px;color:${s.col};line-height:1">${s.val}</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:4px;letter-spacing:.05em">${s.label}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <!-- HEADCOUNT BY ZONE -->
+      <div class="report-section">
+        <div class="report-section-title">👥 Total Headcount by Zone (Week)</div>
+        ${ZONES.map(z=>`
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <div style="font-size:12px;width:130px;flex-shrink:0">${z.label}</div>
+            <div style="flex:1;height:6px;background:var(--faint);border-radius:3px;overflow:hidden">
+              <div style="height:100%;background:var(--green);border-radius:3px;width:${totalHC>0?Math.round(weekHC[z.label]/totalHC*100):0}%;transition:width .4s"></div>
+            </div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--green);width:30px;text-align:right">${weekHC[z.label]}</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- ISSUES BREAKDOWN -->
+      <div class="report-section">
+        <div class="report-section-title">⚠️ Issues by Category</div>
+        ${Object.keys(issueCats).length===0
+          ?'<div style="font-size:12px;color:var(--green)">✓ No issues logged this week!</div>'
+          :Object.entries(issueCats).sort((a,b)=>b[1]-a[1]).map(([cat,count])=>`
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+              <div style="font-size:12px;width:110px;flex-shrink:0">${cat}</div>
+              <div style="flex:1;height:6px;background:var(--faint);border-radius:3px;overflow:hidden">
+                <div style="height:100%;background:var(--red);border-radius:3px;width:${Math.round(count/allIssues.length*100)}%"></div>
+              </div>
+              <div style="font-family:var(--mono);font-size:11px;color:var(--red);width:20px;text-align:right">${count}</div>
+            </div>`).join('')
+        }
+      </div>
+
+      <!-- RECURRING ISSUES -->
+      ${recurring.length>0?`
+      <div class="report-section">
+        <div class="report-section-title">🔁 Recurring Issues</div>
+        ${recurring.map(([desc,count])=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;padding:6px 10px;background:var(--faint);border-radius:5px">
+            <div style="font-size:12px;flex:1">${desc}</div>
+            <span class="issue-badge fault">${count}x</span>
+          </div>`).join('')}
+      </div>`:''}
+
+      <!-- MAINTENANCE BREAKDOWN -->
+      <div class="report-section">
+        <div class="report-section-title">🔧 Maintenance by Category</div>
+        ${Object.keys(maintCats).length===0
+          ?'<div style="font-size:12px;color:var(--muted)">No maintenance logged this week.</div>'
+          :Object.entries(maintCats).sort((a,b)=>b[1]-a[1]).map(([cat,count])=>`
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+              <div style="font-size:12px;width:110px;flex-shrink:0">${cat}</div>
+              <div style="flex:1;height:6px;background:var(--faint);border-radius:3px;overflow:hidden">
+                <div style="height:100%;background:var(--warm);border-radius:3px;width:${allMaint.length>0?Math.round(count/allMaint.length*100):0}%"></div>
+              </div>
+              <div style="font-family:var(--mono);font-size:11px;color:var(--warm);width:20px;text-align:right">${count}</div>
+            </div>`).join('')
+        }
+      </div>
+
+      <!-- WINDOWS & BLINDS -->
+      <div class="report-section">
+        <div class="report-section-title">🪟 Windows &amp; Blinds Summary</div>
+        <div style="font-size:13px;margin-bottom:8px">
+          <span style="color:var(--yellow);font-family:var(--mono)">${totalWindows}</span> total windows open recorded &nbsp;·&nbsp;
+          <span style="color:var(--yellow);font-family:var(--mono)">${totalBlinds}</span> total blinds open recorded
+        </div>
+        ${allRounds.filter(r=>r.blindsSummary?.length>0).length===0
+          ?'<div style="font-size:12px;color:var(--green)">✓ No open blinds or windows this week.</div>'
+          :weekReports.map(rep=>{
+            const dayOpen=rep.rounds.flatMap(r=>r.blindsSummary||[]);
+            if(dayOpen.length===0)return '';
+            return `<div style="margin-bottom:6px"><div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">${formatDate(rep.date)}</div>
+              ${dayOpen.map(b=>`<div style="font-size:12px;padding-left:10px">• ${b.zone}: ${b.windows} window${b.windows!==1?'s':''}, ${b.blinds} blind${b.blinds!==1?'s':''}</div>`).join('')}</div>`;
+          }).join('')
+        }
+      </div>
+
+      <!-- EXPORT -->
+      <div class="report-section" style="border-bottom:none">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-green" onclick="exportWeeklyReport()">⬇ Export Weekly Report</button>
+          <button class="btn btn-outline" onclick="showDayReports()">← Back to Daily Reports</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function exportWeeklyReport(){
+  const reports=getDayReports();
+  const now=new Date();
+  const weekAgo=new Date(now-7*86400000);
+  const weekReports=reports.filter(r=>new Date(r.date+'T00:00:00')>=weekAgo);
+  if(weekReports.length===0){showToast('No data to export','err');return;}
+
+  const allRounds=weekReports.flatMap(r=>r.rounds);
+  const allIssues=allRounds.flatMap(r=>r.issues);
+  const allMaint=allRounds.flatMap(r=>r.maintenance);
+
+  const L=[];
+  L.push('COLLINSON FM — WEEKLY SUMMARY REPORT');
+  L.push('Period: '+formatDate(weekReports[weekReports.length-1].date)+' to '+formatDate(weekReports[0].date));
+  L.push('Generated: '+new Date().toLocaleString('en-ZA'));
+  L.push('Days: '+weekReports.length+' | Rounds: '+allRounds.length);
+  L.push('');
+  L.push('═══════════════════════════════════');
+  L.push('ISSUES & FAULTS ('+allIssues.length+' total)');
+  L.push('═══════════════════════════════════');
+  allIssues.length===0?L.push('None.'):allIssues.forEach(i=>L.push('• ['+i.type.toUpperCase()+'] '+i.area+' — '+i.desc+' | '+i.action+(i.note?' | '+i.note:'')));
+  L.push('');
+  L.push('═══════════════════════════════════');
+  L.push('REPAIRS & MAINTENANCE ('+allMaint.length+' total)');
+  L.push('═══════════════════════════════════');
+  allMaint.length===0?L.push('None.'):allMaint.forEach(m=>L.push('• ['+m.status.toUpperCase()+'] '+m.category+' — '+(m.description||'No description')+(m.notes?' | '+m.notes:'')));
+  L.push('');
+  L.push('═══════════════════════════════════');
+  L.push('HEADCOUNT BY ZONE (cumulative)');
+  L.push('═══════════════════════════════════');
+  ZONES.forEach(z=>{
+    const total=allRounds.reduce((s,r)=>s+(r.hcSummary?.[z.label]||0),0);
+    L.push(z.label+': '+total);
+  });
+  L.push('');
+  L.push('═══════════════════════════════════');
+  L.push('WINDOWS & BLINDS OPEN (by day)');
+  L.push('═══════════════════════════════════');
+  weekReports.forEach(rep=>{
+    const dayOpen=rep.rounds.flatMap(r=>r.blindsSummary||[]);
+    L.push(formatDate(rep.date)+': '+(dayOpen.length===0?'All closed':dayOpen.map(b=>b.zone+' ('+b.windows+'W, '+b.blinds+'B)').join(', ')));
+  });
+
+  const blob=new Blob([L.join('\n')],{type:'text/plain'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='FM_WeeklyReport_'+today()+'.txt';a.click();
+  showToast('Weekly report exported ✓','ok');
+}
+
+// ═══════════════════════════════════════════════════════════
+// WHATSAPP SUMMARY (Row 14 only)
+// ═══════════════════════════════════════════════════════════
+function generateWA(){
+  const lines=['Good evening all,'];
+  ZONES.slice().reverse().forEach(z=>{
+    const d=data[z.id]||{};
+    const hc=d.hc??0;
+    const wc=d.windowCount||0;
+    const bc=d.blindsCount||0;
+    const blindsClosed=!d.blindsOpen;
+    let line=`${z.label}:\n`;
+    if(hc===0) line+=`No staff members working in the area. `;
+    else if(hc===1) line+=`1 staff member working in the area. `;
+    else line+=`${hc} staff members working in the area. `;
+    line+=`All aircons switched off`;
+    if(blindsClosed){ line+=`, all blinds closed and all windows closed.`; }
+    else{
+      const parts=[];
+      if(wc>0)parts.push(wc===1?'one window':wc+' windows');
+      if(bc>0)parts.push(bc===1?'one blind':bc+' blinds');
+      line+=`. ${parts.join(' and ')+' open'}.`;
+    }
+    const lightKey='lt_'+z.id;
+    const lt=specialData?.lights?.[lightKey];
+    if(lt?.faulty){line+=lt.fixed?' Lights replaced.':' Faulty lights — call logged.';}
+    else{line+=' All lights switched off.';}
+    lines.push(line);
+  });
+  const msg=lines.join('\n\n');
+  document.getElementById('waArea').innerHTML=`
+    <div class="wa-card" style="margin-top:16px">
+      <div class="wa-hdr">
+        <span>📱 WhatsApp Summary</span>
+        <span style="font-size:11px;opacity:.7">Row 14 · ${nowStr()}</span>
+      </div>
+      <div class="wa-body">
+        <div class="wa-bubble">${msg.replace(/\n/g,'<br>')}</div>
+        <div class="wa-time">${nowStr()} ✓✓</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-wa" onclick="copyWA()">📋 Copy Message</button>
+          <button class="btn btn-outline" style="font-size:12px" onclick="editWA()">✎ Edit</button>
+        </div>
+      </div>
+    </div>`;
+  window._waMsg=msg;
+}
+function copyWA(){
+  navigator.clipboard.writeText(window._waMsg||'').then(()=>showToast('WhatsApp message copied ✓','ok'));
+}
+function editWA(){
+  const el=document.querySelector('.wa-bubble');if(!el)return;
+  const ta=document.createElement('textarea');
+  ta.value=window._waMsg||'';
+  ta.style.cssText='width:100%;min-height:200px;background:#fff;color:#111;border:none;border-radius:8px;padding:12px;font-size:13px;font-family:var(--body);line-height:1.6;resize:vertical';
+  ta.oninput=()=>{window._waMsg=ta.value;};
+  el.parentNode.replaceChild(ta,el);ta.focus();
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCRIPT GENERATION
+// ═══════════════════════════════════════════════════════════
+function showScript(){
+  const raw=generateRawScript();
+  const hl=raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/(\/\/.*)/g,'<span style="color:#334455">$1</span>')
+    .replace(/\b(function|const|var|let|return)\b/g,'<span style="color:#4fc1e9">$1</span>')
+    .replace(/'([^']*)'/g,"<span style='color:#a8e6cf'>'$1'</span>")
+    .replace(/\b(\d+\.?\d*)\b/g,'<span style="color:#ffd3a0">$1</span>');
+  document.getElementById('scriptArea').innerHTML=`
+    <div class="script-out" style="margin-top:16px">
+      <div class="script-out-hdr">
+        <span>Apps Script · Row ${sheetRow}</span>
+        <button class="copy-btn" id="copyScriptBtn" onclick="copyScript()">Copy Script</button>
+      </div>
+      <div class="code-block">${hl}</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="copyScript()">📋 Copy Script</button>
+      <button class="btn btn-outline" onclick="downloadScript()">⬇ Download .gs</button>
+    </div>`;
+  document.getElementById('scriptArea').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function generateRawScript(){
+  const L=[];
+  L.push('// COLLINSON FM — Walkabout Data Entry');
+  L.push('// Row: '+sheetRow+' | Generated: '+new Date().toLocaleString('en-ZA'));
+  L.push('// 1. Open Google Sheet → Extensions → Apps Script');
+  L.push('// 2. Paste, click Run ▶, grant permissions');
+  L.push('');
+  const ct=specialData.contractors;
+  if(ct?.onSite)L.push('// CONTRACTOR: '+ct.name+' — '+ct.work);
+  const cs=specialData.contractorStatus;
+  if(cs)L.push('// CONTRACTOR STATUS: '+cs.status+(cs.departTime?' at '+cs.departTime:''));
+  const cl=specialData.cleaning;
+  if(cl)['Dynamic','Resolve'].forEach(co=>{if(cl[co])L.push('// CLEANING '+co+': '+(cl[co].issues?'ISSUES — '+cl[co].note:'OK'));});
+  if(L[L.length-1]!=='')L.push('');
+  L.push('function fillWalkabout() {');
+  L.push("  const ss = SpreadsheetApp.openById('"+SHEET_ID+"');");
+  L.push("  const sheet = ss.getSheets()[0];");
+  L.push('');
+  ZONES.forEach(z=>{
+    const d=data[z.id]||{};
+    L.push('  // '+z.label);
+    L.push("  sheet.getRange('"+z.cols.ac+sheetRow+"').setValue("+JSON.stringify(d.acNote??'—')+');');
+    L.push("  sheet.getRange('"+z.cols.hc+sheetRow+"').setValue("+(d.hc!==undefined?d.hc:0)+');');
+    L.push("  sheet.getRange('"+z.cols.blinds+sheetRow+"').setValue("+JSON.stringify(d.blindsStr??'—')+');');
+    L.push('');
+  });
+  L.push("  SpreadsheetApp.flush();");
+  L.push("  SpreadsheetApp.getUi().alert('Row "+sheetRow+" filled!');");
+  L.push('}');
+  return L.join('\n');
+}
+function copyScript(){
+  navigator.clipboard.writeText(generateRawScript()).then(()=>{
+    const b=document.getElementById('copyScriptBtn');
+    if(b){b.textContent='✓ Copied!';b.classList.add('done');setTimeout(()=>{b.textContent='Copy Script';b.classList.remove('done');},2500);}
+    showToast('Script copied ✓','ok');
+  });
+}
+function downloadScript(){
+  const blob=new Blob([generateRawScript()],{type:'text/plain'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='collinson_row'+sheetRow+'_'+today()+'.gs';a.click();
+  showToast('Script downloaded ✓','ok');
+}
+
+// ═══════════════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════════════
+function showToast(msg,type=''){
+  const t=document.getElementById('toast');t.textContent=msg;
+  t.className='toast show '+type;setTimeout(()=>t.className='toast',3000);
+}
+
+init();
+</script>
+</body>
+</html>
