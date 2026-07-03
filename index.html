@@ -621,6 +621,16 @@ input[type=file]{display:none}
       <div class="hc-name">CLEANING CHECKLIST</div>
       <div class="hc-desc">External areas · Day-based schedule · Auto-saves on completion</div>
     </div>
+    <div class="home-card" onclick="openManualEntry()" style="grid-column:1/-1">
+      <div class="hc-icon">🖊</div>
+      <div class="hc-name">MANUAL TIME ENTRY</div>
+      <div class="hc-desc">Weekend call-outs · Log hours for Simon or anyone, no walkabout needed</div>
+    </div>
+    <div class="home-card" onclick="viewDailyReportsDirect()" style="grid-column:1/-1">
+      <div class="hc-icon">📊</div>
+      <div class="hc-name">DAILY REPORTS</div>
+      <div class="hc-desc">See or export what's already been logged today — no need to finish a round first</div>
+    </div>
   </div>
   <div class="home-status">
     <div class="home-status-dot" id="homeStatusDot"></div>
@@ -834,7 +844,10 @@ input[type=file]{display:none}
 
     <!-- SECONDARY ACTIONS -->
     <div class="btn-row">
-      <button class="btn btn-green" onclick="showScript()">⚡ Generate Script</button>
+      <button class="btn btn-green" id="autoSyncBtn" onclick="autoSyncToSheet()">🔄 Auto-Sync to Sheet</button>
+      <button class="btn btn-outline" onclick="showScript()">⚡ Generate Script (manual)</button>
+    </div>
+    <div class="btn-row">
       <button class="btn btn-outline" onclick="showReview()">📋 Review Data</button>
       <button class="btn btn-outline" onclick="showPhotoLog()">📷 Photo Log</button>
     </div>
@@ -857,8 +870,10 @@ input[type=file]{display:none}
     <div id="maintArea"></div>
     <div id="dayReportArea"></div>
     <div id="scriptArea"></div>
+    <div id="autoSyncArea"></div>
   </div>
 </div>
+
 
 <input type="file" id="fi-ac"   accept="image/*" capture="environment" onchange="handlePhoto(event,'ac')">
 <input type="file" id="fi-room" accept="image/*" capture="environment" onchange="handlePhoto(event,'room')">
@@ -2012,6 +2027,11 @@ const ROWS = [
 const ZONE_STEPS = ['ac','room','hc','blinds'];
 const MAINT_CATS = ['HVAC','Electrical','Plumbing','Cleaning','Structural','Safety','General'];
 const SHEET_ID   = '1eEtwpoUJVQWQ0WXqp-IAwA62qMQnCUHqVhbtZc6KhTw';
+
+// ── AUTO-SYNC ──
+// Paste the Web App URL from your Apps Script deployment here (ends in /exec).
+// Leave blank to keep using the manual "Generate Script" button only.
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwfsRo_TadYEIPDFcDNpnen6r5-NRBV3-jzYvlQD5k_8wrEpZ1wDSwJ0ge7nTnB2IOnVg/exec';
 
 // ═══════════════════════════════════════════════════════════
 // STATE
@@ -4320,6 +4340,191 @@ function downloadScript(){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='collinson_row'+sheetRow+'_'+today()+'.gs';a.click();
   showToast('Script downloaded ✓','ok');
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUTO-SYNC — replaces "Generate Script → copy → paste → Run"
+// Posts straight to the deployed Apps Script Web App (see WEBAPP_URL above).
+// ═══════════════════════════════════════════════════════════
+function postToSheet(type, payload){
+  if(!WEBAPP_URL){
+    showToast('Set WEBAPP_URL first — see FM_AutoSync_WebApp.gs.txt','err');
+    return Promise.reject(new Error('WEBAPP_URL not set'));
+  }
+  payload.type = type;
+  // Apps Script Web Apps don't return CORS headers you can read from the
+  // browser, so we fire with mode:'no-cors' — the POST still executes
+  // server-side and writes the row; we just can't read the JSON response.
+  return fetch(WEBAPP_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain' }, // avoids a CORS preflight
+    body: JSON.stringify(payload)
+  });
+}
+
+function autoSyncToSheet(){
+  if(!WEBAPP_URL){
+    document.getElementById('autoSyncArea').innerHTML =
+      `<div style="background:var(--faint);border:1px solid var(--border);border-radius:10px;
+        padding:12px 14px;margin-top:12px;font-size:13px;color:var(--muted)">
+        ⚠ Auto-sync isn't set up yet — WEBAPP_URL is empty. Use "Generate Script (manual)"
+        for now, or ask to have the Web App deployed and wired in.
+      </div>`;
+    return;
+  }
+
+  const btn = document.getElementById('autoSyncBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '🔄 Syncing…'; }
+
+  const jobs = [];
+
+  // 1) Zone data (AC / headcount / blinds) — same data the manual script wrote
+  const zones = {};
+  ZONES.forEach(z=>{
+    const d = data[z.id] || {};
+    zones[z.id] = { acNote: d.acNote, hc: d.hc, blindsStr: d.blindsStr };
+  });
+  jobs.push(postToSheet('zone', {
+    row: sheetRow,
+    date: today(),
+    inspector: inspector.name || '',
+    zones: zones
+  }));
+
+  // 2) Maintenance items logged this round
+  maintItems.forEach(m=>{
+    jobs.push(postToSheet('maintenance', {
+      date: today(),
+      day: new Date().toLocaleDateString('en-ZA',{weekday:'short'}),
+      category: m.category || '',
+      description: m.description || '',
+      status: m.status || '',
+      notes: m.notes || '',
+      loggedBy: inspector.name || ''
+    }));
+  });
+
+  // 3) Contractor on-site entry, if logged this round
+  const ct = specialData.contractors;
+  if(ct && ct.onSite){
+    jobs.push(postToSheet('contractor', {
+      date: today(),
+      day: new Date().toLocaleDateString('en-ZA',{weekday:'short'}),
+      name: ct.name || '',
+      work: ct.work || '',
+      status: (specialData.contractorStatus && specialData.contractorStatus.status) || '',
+      departTime: (specialData.contractorStatus && specialData.contractorStatus.departTime) || '',
+      loggedBy: inspector.name || ''
+    }));
+  }
+
+  Promise.all(jobs).then(()=>{
+    if(btn){ btn.disabled = false; btn.textContent = '✓ Synced'; setTimeout(()=>{btn.textContent='🔄 Auto-Sync to Sheet';},2500); }
+    showToast('Synced to Sheet ✓','ok');
+  }).catch(()=>{
+    if(btn){ btn.disabled = false; btn.textContent = '🔄 Auto-Sync to Sheet'; }
+    showToast('Sync failed — check WEBAPP_URL / connection','err');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// MANUAL ENTRY — for hours that don't come from a walkabout
+// (Simon's weekend call-outs, or logging on someone else's behalf)
+// ═══════════════════════════════════════════════════════════
+const MANUAL_STAFF = ['Roelof Paul','Brad Ayrton','Simon de Nobrega'];
+
+function openManualEntry(){
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay show';
+  overlay.id = 'manual-entry-overlay';
+  overlay.onclick = function(e){ if(e.target===overlay) closeManualEntry(); };
+  overlay.innerHTML = `
+    <div class="handover-modal" style="max-width:420px;margin:auto;padding:20px">
+      <h3 style="margin:0 0 14px">🖊 Manual Time Entry</h3>
+      <label style="font-size:12px;color:var(--muted)">Staff Member</label>
+      <select id="me-staff" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px">
+        ${MANUAL_STAFF.map(s=>`<option value="${s}">${s}</option>`).join('')}
+      </select>
+      <label style="font-size:12px;color:var(--muted)">Date</label>
+      <input id="me-date" type="date" value="${today()}" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px">
+      <div style="display:flex;gap:8px">
+        <div style="flex:1">
+          <label style="font-size:12px;color:var(--muted)">Start</label>
+          <input id="me-start" type="time" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:12px;color:var(--muted)">End</label>
+          <input id="me-end" type="time" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px">
+        </div>
+      </div>
+      <label style="font-size:12px;color:var(--muted)">Category</label>
+      <input id="me-category" type="text" placeholder="e.g. Callout, Power Failure, Reactive Maintenance"
+        style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px">
+      <label style="font-size:12px;color:var(--muted)">Notes</label>
+      <textarea id="me-notes" rows="3" style="width:100%;padding:10px;margin:4px 0 14px;border-radius:8px"></textarea>
+      <div class="btn-row">
+        <button class="btn btn-outline" onclick="closeManualEntry()">Cancel</button>
+        <button class="btn btn-green" onclick="submitManualEntry()">Save Entry</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function closeManualEntry(){
+  const el = document.getElementById('manual-entry-overlay');
+  if(el) el.remove();
+}
+
+function submitManualEntry(){
+  const staff = document.getElementById('me-staff').value;
+  const dateVal = document.getElementById('me-date').value;
+  const start = document.getElementById('me-start').value;
+  const end = document.getElementById('me-end').value;
+  const category = document.getElementById('me-category').value;
+  const notes = document.getElementById('me-notes').value;
+
+  if(!dateVal || !start || !end){
+    showToast('Date, start and end are required','err');
+    return;
+  }
+
+  const d = new Date(dateVal + 'T12:00:00');
+  const day = d.toLocaleDateString('en-ZA',{weekday:'short'});
+
+  postToSheet('manual', {
+    date: dateVal,
+    day: day,
+    staff: staff,
+    start: start,
+    end: end,
+    category: category,
+    notes: notes,
+    loggedBy: inspector.name || staff
+  }).then(()=>{
+    showToast('Manual entry saved ✓','ok');
+    closeManualEntry();
+  }).catch(()=>{
+    showToast('Save failed — check WEBAPP_URL / connection','err');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// DIRECT DAILY REPORTS ACCESS — no need to complete a round first.
+// Fixes the gap where "View Daily Reports" only lived on the
+// post-round completion screen; if you forgot to Generate Script
+// / Auto-Sync before hitting Save & Go Home, your data is still
+// safe (Save & Go Home saves the report before clearing the screen) —
+// this just gets you back to it.
+// ═══════════════════════════════════════════════════════════
+function viewDailyReportsDirect(){
+  launchWalkabout();
+  setTimeout(function(){
+    document.getElementById('progressTrack').style.display = 'none';
+    showDayReports();
+    const el = document.getElementById('dayReportArea');
+    if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+  }, 60);
 }
 
 // ═══════════════════════════════════════════════════════════
