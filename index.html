@@ -2031,7 +2031,7 @@ const SHEET_ID   = '1eEtwpoUJVQWQ0WXqp-IAwA62qMQnCUHqVhbtZc6KhTw';
 // ── AUTO-SYNC ──
 // Paste the Web App URL from your Apps Script deployment here (ends in /exec).
 // Leave blank to keep using the manual "Generate Script" button only.
-const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwfsRo_TadYEIPDFcDNpnen6r5-NRBV3-jzYvlQD5k_8wrEpZ1wDSwJ0ge7nTnB2IOnVg/exec';
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwbiVMd8CtXpcW0vpLevHfb4N5UQSpS1vTh5RQO-WL1T_CehuNMWKb_8HYK25DzwJDd4g/exec';
 
 // ═══════════════════════════════════════════════════════════
 // STATE
@@ -2673,7 +2673,10 @@ function buildContractorsStep(){
       <div class="field-label">CONTRACTOR NAME / COMPANY</div>
       <input class="temp-edit" id="ctName" style="width:100%;font-size:14px;padding:10px 12px;margin-bottom:10px" placeholder="Enter name or company...">
       <div class="field-label">WORK AREA / DESCRIPTION</div>
-      <input class="temp-edit" id="ctWork" style="width:100%;font-size:14px;padding:10px 12px" placeholder="e.g. Plumbing - 2nd Floor bathrooms...">
+      <input class="temp-edit" id="ctWork" style="width:100%;font-size:14px;padding:10px 12px;margin-bottom:10px" placeholder="e.g. Plumbing - 2nd Floor bathrooms...">
+      <div class="field-label">ARRIVAL TIME</div>
+      <input class="temp-edit" id="ctArriveTime" type="time" style="width:100%;font-size:14px;padding:10px 12px">
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">Defaults to now — change it if they actually arrived earlier or you're logging this after the fact (e.g. their round already passed).</div>
     </div>
     <div class="nav-row">
       <button class="back-btn" onclick="goBack()">&#8592; Back</button>
@@ -2685,10 +2688,14 @@ function selectContractors(yes){
   document.getElementById('yn-no').className='yn-btn '+(!yes?'selected-no':'');
   document.getElementById('ct-wrap').style.display=yes?'block':'none';
   document.getElementById('nextBtn').disabled=false;
+  if(yes){
+    const at = document.getElementById('ctArriveTime');
+    if(at && !at.value) at.value = nowStr();
+  }
 }
 function confirmContractors(){
   const yes=document.getElementById('yn-yes').classList.contains('selected-yes');
-  specialData.contractors={onSite:yes,name:document.getElementById('ctName')?.value.trim()||'',work:document.getElementById('ctWork')?.value.trim()||''};
+  specialData.contractors={onSite:yes,name:document.getElementById('ctName')?.value.trim()||'',work:document.getElementById('ctWork')?.value.trim()||'',arriveTime:document.getElementById('ctArriveTime')?.value||''};
   advanceSpecial(); showToast(yes?'Contractors noted':'No contractors','ok');
 }
 
@@ -3376,13 +3383,15 @@ function toggleMaintCat(catId){
 }
 
 function addMaintItem(catId){
-  maintItems.push({id:Date.now(),category:catId,description:'',status:'done',notes:''});
+  maintItems.push({id:Date.now(),category:catId,description:'',status:'done',notes:'',party:''});
   renderMaintCat(catId);
   const body=document.getElementById('maint-body-'+catId);
   const arrow=document.getElementById('maint-arrow-'+catId);
   if(body)body.style.display='block';
   if(arrow)arrow.textContent='▴';
 }
+
+const MAINT_PARTIES = ['Landlord','DNC','DNC Subcontractor'];
 
 function renderMaintCat(catId){
   const el=document.getElementById('maint-items-'+catId);
@@ -3397,6 +3406,7 @@ function renderMaintCat(catId){
   ];
   el.innerHTML=items.map((item,li)=>{
     const gi=maintItems.indexOf(item);
+    const needsParty = (item.status==='pending' || item.status==='contractor');
     return `<div style="background:var(--faint);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px">
       <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.08em;margin-bottom:6px">ITEM ${li+1}</div>
       <input class="txt-input" style="margin-bottom:6px" placeholder="Description — what was done or reported..."
@@ -3409,6 +3419,19 @@ function renderMaintCat(catId){
                    background:${item.status===opt.s?'var(--accent-dim)':'var(--faint)'};
                    color:${item.status===opt.s?'var(--accent)':'var(--muted)'}">${opt.label}</div>`).join('')}
       </div>
+      ${needsParty ? `
+      <div style="margin-bottom:6px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-family:var(--mono);letter-spacing:.04em">RESPONSIBLE PARTY (for invoicing/routing)</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          ${MAINT_PARTIES.map(p=>`
+            <div onclick="setMaintParty(${gi},'${p}','${catId}')"
+              style="padding:5px 10px;border:1px solid ${item.party===p?'var(--accent)':'var(--border2)'};border-radius:4px;
+                     font-size:11px;cursor:pointer;font-family:var(--mono);transition:all .15s;
+                     background:${item.party===p?'var(--accent-dim)':'var(--faint)'};
+                     color:${item.party===p?'var(--accent)':'var(--muted)'}">${p}</div>`).join('')}
+        </div>
+        ${!item.party ? `<div style="font-size:10px;color:var(--red);margin-top:4px">⚠ Pick a party so this routes to the right log</div>` : ''}
+      </div>` : ''}
       <input class="txt-input" placeholder="Additional notes..." value="${item.notes.replace(/"/g,'&quot;')}"
         oninput="maintItems[${gi}].notes=this.value">
       <div style="text-align:right;margin-top:6px">
@@ -3425,6 +3448,7 @@ function renderMaintList(){
 
 function setMaintCat(i,cat){ maintItems[i].category=cat; renderMaintList(); }
 function setMaintStatus(i,s,catId){ maintItems[i].status=s; renderMaintCat(catId); }
+function setMaintParty(i,p,catId){ maintItems[i].party=p; renderMaintCat(catId); }
 function removeMaintItem(i,catId){ maintItems.splice(i,1); renderMaintCat(catId); }
 
 function completeMaintenance(){
@@ -4392,14 +4416,29 @@ function autoSyncToSheet(){
     zones: zones
   }));
 
-  // 2) Maintenance items logged this round
+  // 2) Maintenance items logged this round — routed by status/party:
+  //    Completed (DNC fixed it)          -> Reactive Maintenance
+  //    Call Logged (landlord's scope)     -> Landlord Call Log
+  //    Pending / Contractor -> routed by the chosen Responsible Party:
+  //       Landlord          -> Landlord Call Log
+  //       DNC               -> Reactive Maintenance
+  //       DNC Subcontractor -> Contractor Log
   maintItems.forEach(m=>{
-    jobs.push(postToSheet('maintenance', {
+    let syncType = 'maintenance'; // default -> Reactive Maintenance tab
+    if(m.status === 'logged'){
+      syncType = 'landlord';
+    } else if(m.status === 'pending' || m.status === 'contractor'){
+      if(m.party === 'Landlord') syncType = 'landlord';
+      else if(m.party === 'DNC Subcontractor') syncType = 'contractor_item';
+      else syncType = 'maintenance'; // DNC, or party not yet picked
+    }
+    jobs.push(postToSheet(syncType, {
       date: today(),
       day: new Date().toLocaleDateString('en-ZA',{weekday:'short'}),
       category: m.category || '',
       description: m.description || '',
       status: m.status || '',
+      party: m.party || '',
       notes: m.notes || '',
       loggedBy: inspector.name || ''
     }));
@@ -4413,6 +4452,7 @@ function autoSyncToSheet(){
       day: new Date().toLocaleDateString('en-ZA',{weekday:'short'}),
       name: ct.name || '',
       work: ct.work || '',
+      arriveTime: ct.arriveTime || '',
       status: (specialData.contractorStatus && specialData.contractorStatus.status) || '',
       departTime: (specialData.contractorStatus && specialData.contractorStatus.departTime) || '',
       loggedBy: inspector.name || ''
