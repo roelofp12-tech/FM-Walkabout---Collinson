@@ -190,9 +190,25 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .ho-header{padding:14px 16px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
 .ho-header h3{font-size:16px;font-weight:700;margin-bottom:2px}
 .ho-header p{font-size:12px;color:var(--muted)}
-.ho-body{flex:1;overflow-y:auto;padding:14px 16px;font-size:12px;line-height:1.8;font-family:'SF Mono','Fira Code',monospace;color:var(--text);white-space:pre-wrap}
+.ho-body{flex:1;overflow-y:auto;padding:14px 16px;color:var(--text)}
+.ho-report-text{font-size:12px;line-height:1.8;font-family:'SF Mono','Fira Code',monospace;white-space:pre-wrap}
+.ho-signoff{margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+.ho-signoff-row{display:flex;gap:10px}
+.ho-signoff-row .ho-field{flex:1}
+.ho-field{margin-bottom:12px}
+.ho-field label{font-size:11px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;display:block;margin-bottom:5px;font-family:-apple-system,'SF Pro Display',BlinkMacSystemFont,'Segoe UI',sans-serif}
+.ho-field-value{font-size:14px;font-weight:600;color:var(--text);background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;min-height:19px}
+.ho-field input[type=text]{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:15px;padding:10px 12px;outline:none;box-sizing:border-box}
+.ho-field input[type=text]:focus{border-color:var(--accent)}
+.ho-field input[type=text]::placeholder{color:var(--muted)}
+.ho-sigpad-wrap{position:relative;background:#ffffff;border:1.5px dashed #94a3b8;border-radius:var(--radius-sm);height:130px;overflow:hidden}
+.ho-sigpad-wrap.signed{border-style:solid;border-color:var(--accent)}
+#ho-sig-canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+.ho-sig-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:12.5px;text-align:center;padding:0 16px;pointer-events:none}
+.ho-sig-clear{margin-top:8px;width:100%;padding:9px;border-radius:var(--radius-sm);font-size:12.5px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:transparent;color:var(--muted)}
 .ho-footer{padding:12px 16px 0;display:flex;gap:8px;flex-shrink:0}
 .ho-footer button{flex:1;padding:13px;border-radius:var(--radius-sm);font-size:14px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--surface2);color:var(--text)}
+.ho-footer .ho-pdf:disabled{opacity:.4;cursor:not-allowed}
 .ho-footer .ho-pdf{background:#a78bfa;border-color:#a78bfa;color:#0f172a}
 
 /* REPORT MODAL */
@@ -810,10 +826,40 @@ input[type=file]{display:none}
       <h3>🤝 Daily Handover Sheet</h3>
       <p id="ho-subtitle">Faults &amp; notes — all inspectors</p>
     </div>
-    <div class="ho-body" id="ho-body"></div>
+    <div class="ho-body" id="ho-body">
+      <div class="ho-report-text" id="ho-report-text"></div>
+      <div class="ho-signoff" id="ho-signoff">
+        <div class="ho-signoff-row">
+          <div class="ho-field">
+            <label>Prepared by</label>
+            <div class="ho-field-value" id="ho-prepared-by">—</div>
+          </div>
+          <div class="ho-field">
+            <label>Time</label>
+            <div class="ho-field-value" id="ho-prepared-time">—</div>
+          </div>
+        </div>
+        <div class="ho-field">
+          <label>Received by</label>
+          <input type="text" id="ho-received-by" placeholder="Type name (e.g. Mbonisi or Mandisa)" autocomplete="off" oninput="updateHandoverSignState()">
+        </div>
+        <div class="ho-field">
+          <label>Date</label>
+          <div class="ho-field-value" id="ho-date-received">—</div>
+        </div>
+        <div class="ho-field">
+          <label>FM Signature</label>
+          <div class="ho-sigpad-wrap" id="ho-sigpad-wrap">
+            <canvas id="ho-sig-canvas"></canvas>
+            <div class="ho-sig-placeholder" id="ho-sig-placeholder">Sign here with finger, mouse or stylus</div>
+          </div>
+          <button type="button" class="ho-sig-clear" onclick="clearHandoverSignature()">Clear signature</button>
+        </div>
+      </div>
+    </div>
     <div class="ho-footer">
       <button onclick="closeHandover()">Close</button>
-      <button class="ho-pdf" onclick="downloadHandoverPDF()">⬇ Download PDF</button>
+      <button class="ho-pdf" id="ho-pdf-btn" onclick="downloadHandoverPDF()" disabled>⬇ Download PDF</button>
     </div>
   </div>
 </div>
@@ -2044,25 +2090,123 @@ function buildHandoverText() {
   if(!hasAny) r += 'No faults or notes recorded today.\nAll systems operational.\n\n';
 
   r += `${'─'.repeat(46)}\n`;
-  r += `Prepared by: _______________________\n`;
-  r += `Received by: _______________________\n`;
-  r += `Time:        _______________________\n`;
-  r += `${'─'.repeat(46)}\n`;
-  r += `FM Signature: ______________________`;
+  r += `Sign-off details below.`;
   return r;
 }
 
+// ── HANDOVER SIGN-OFF (prepared/received/signature) ──
+let handoverPreparedTime = null;
+let hoSigCanvas = null, hoSigCtx = null, hoSigHasContent = false, hoSigDrawing = false, hoSigLast = null;
+
 function openHandover() {
   const text = buildHandoverText();
-  document.getElementById('ho-body').textContent = text;
+  document.getElementById('ho-report-text').textContent = text;
   const dk = todayKey();
   const d = new Date(dk+'T12:00:00');
   document.getElementById('ho-subtitle').textContent = d.toLocaleDateString('en-ZA',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+
+  // Prepared by / time — auto-filled from the logged-in inspector, frozen at open time
+  handoverPreparedTime = new Date();
+  const preparedByEl = document.getElementById('ho-prepared-by');
+  if(preparedByEl) preparedByEl.textContent = (currentUser && currentUser.name) || '—';
+  const preparedTimeEl = document.getElementById('ho-prepared-time');
+  if(preparedTimeEl) preparedTimeEl.textContent = handoverPreparedTime.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
+  const dateReceivedEl = document.getElementById('ho-date-received');
+  if(dateReceivedEl) dateReceivedEl.textContent = handoverPreparedTime.toLocaleDateString('en-ZA',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const receivedByInput = document.getElementById('ho-received-by');
+  if(receivedByInput) receivedByInput.value = '';
+
   document.getElementById('handover-modal').classList.add('show');
+  // Canvas needs real layout dimensions, so init just after the sheet has become visible
+  setTimeout(() => { initHandoverSignaturePad(); updateHandoverSignState(); }, 60);
 }
 function closeHandover() { document.getElementById('handover-modal').classList.remove('show'); }
 
+function initHandoverSignaturePad() {
+  hoSigCanvas = document.getElementById('ho-sig-canvas');
+  if(!hoSigCanvas) return;
+  hoSigCtx = hoSigCanvas.getContext('2d');
+  const wrap = hoSigCanvas.parentElement;
+  const rect = wrap.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  hoSigCanvas.width = Math.max(1, Math.round(rect.width * dpr));
+  hoSigCanvas.height = Math.max(1, Math.round(rect.height * dpr));
+  hoSigCtx.setTransform(1,0,0,1,0,0);
+  hoSigCtx.scale(dpr, dpr);
+  hoSigCtx.lineWidth = 2.2;
+  hoSigCtx.lineCap = 'round';
+  hoSigCtx.lineJoin = 'round';
+  hoSigCtx.strokeStyle = '#0f172a';
+  hoSigHasContent = false;
+  hoSigDrawing = false;
+  const wrapEl = document.getElementById('ho-sigpad-wrap');
+  if(wrapEl) wrapEl.classList.remove('signed');
+  updateHandoverSigPlaceholder();
+
+  if(!hoSigCanvas.dataset.bound) {
+    hoSigCanvas.dataset.bound = '1';
+    hoSigCanvas.addEventListener('pointerdown', hoSigPointerDown);
+    hoSigCanvas.addEventListener('pointermove', hoSigPointerMove);
+    window.addEventListener('pointerup', hoSigPointerUp);
+    hoSigCanvas.addEventListener('pointerleave', hoSigPointerUp);
+  }
+}
+function hoSigPos(e) {
+  const rect = hoSigCanvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+function hoSigPointerDown(e) {
+  e.preventDefault();
+  hoSigDrawing = true;
+  if(hoSigCanvas.setPointerCapture) { try { hoSigCanvas.setPointerCapture(e.pointerId); } catch(err) {} }
+  hoSigLast = hoSigPos(e);
+}
+function hoSigPointerMove(e) {
+  if(!hoSigDrawing) return;
+  e.preventDefault();
+  const p = hoSigPos(e);
+  hoSigCtx.beginPath();
+  hoSigCtx.moveTo(hoSigLast.x, hoSigLast.y);
+  hoSigCtx.lineTo(p.x, p.y);
+  hoSigCtx.stroke();
+  hoSigLast = p;
+  if(!hoSigHasContent) {
+    hoSigHasContent = true;
+    const wrapEl = document.getElementById('ho-sigpad-wrap');
+    if(wrapEl) wrapEl.classList.add('signed');
+    updateHandoverSigPlaceholder();
+    updateHandoverSignState();
+  }
+}
+function hoSigPointerUp() { hoSigDrawing = false; }
+function updateHandoverSigPlaceholder() {
+  const ph = document.getElementById('ho-sig-placeholder');
+  if(ph) ph.style.display = hoSigHasContent ? 'none' : 'flex';
+}
+function clearHandoverSignature() {
+  if(!hoSigCtx || !hoSigCanvas) return;
+  hoSigCtx.clearRect(0, 0, hoSigCanvas.width, hoSigCanvas.height);
+  hoSigHasContent = false;
+  const wrapEl = document.getElementById('ho-sigpad-wrap');
+  if(wrapEl) wrapEl.classList.remove('signed');
+  updateHandoverSigPlaceholder();
+  updateHandoverSignState();
+}
+function updateHandoverSignState() {
+  const receivedByInput = document.getElementById('ho-received-by');
+  const receivedBy = receivedByInput ? receivedByInput.value.trim() : '';
+  const ready = receivedBy.length > 0 && hoSigHasContent;
+  const btn = document.getElementById('ho-pdf-btn');
+  if(btn) btn.disabled = !ready;
+}
+
 function downloadHandoverPDF() {
+  const receivedByInput = document.getElementById('ho-received-by');
+  const receivedByName = receivedByInput ? receivedByInput.value.trim() : '';
+  if(!receivedByName || !hoSigHasContent) {
+    alert('Please enter the receiver\'s name and sign in the FM Signature box before downloading.');
+    return;
+  }
   const {jsPDF} = window.jspdf;
   const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const margin = 14; const pageW = 210; const pageH = 297; const maxY = pageH - 24;
@@ -2181,15 +2325,50 @@ function downloadHandoverPDF() {
   doc.setDrawColor(167,139,250); doc.setLineWidth(0.4); doc.line(margin,y,pageW-margin,y); y += 7;
   doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(88,28,135);
   doc.text('HANDOVER SIGN-OFF', margin, y); y += 7;
-  const fields = ['Prepared by','Time','Received by (FM)','FM Signature','Date received'];
-  fields.forEach(f => {
+
+  const preparedByName = (currentUser && currentUser.name) || '';
+  const preparedTimeStr = handoverPreparedTime ? handoverPreparedTime.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'}) : '';
+  const dateReceivedStr = handoverPreparedTime ? handoverPreparedTime.toLocaleDateString('en-ZA',{day:'2-digit',month:'2-digit',year:'numeric'}) : '';
+
+  const signFields = [
+    {label:'Prepared by', value: preparedByName},
+    {label:'Time', value: preparedTimeStr},
+    {label:'Received by (FM)', value: receivedByName},
+  ];
+  signFields.forEach(f => {
     if(y > maxY) { doc.addPage(); y = 20; }
     doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(71,85,105);
-    doc.text(f+':', margin, y);
+    doc.text(f.label+':', margin, y);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(15,23,42);
+    doc.text(f.value || '—', margin+40, y);
     doc.setDrawColor(200,200,200); doc.setLineWidth(0.3);
-    doc.line(margin+38, y+0.5, pageW-margin, y+0.5);
+    doc.line(margin+38, y+1.5, pageW-margin, y+1.5);
     y += 9;
   });
+
+  // FM Signature — embed the captured on-screen signature image
+  if(y > maxY - 20) { doc.addPage(); y = 20; }
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(71,85,105);
+  doc.text('FM Signature:', margin, y);
+  if(hoSigHasContent && hoSigCanvas) {
+    try {
+      const sigDataUrl = hoSigCanvas.toDataURL('image/png');
+      const imgW = 45, imgH = 16;
+      doc.addImage(sigDataUrl, 'PNG', margin+40, y-12, imgW, imgH);
+    } catch(err) {}
+  }
+  doc.setDrawColor(200,200,200); doc.setLineWidth(0.3);
+  doc.line(margin+38, y+1.5, pageW-margin, y+1.5);
+  y += 9;
+
+  if(y > maxY) { doc.addPage(); y = 20; }
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(71,85,105);
+  doc.text('Date received:', margin, y);
+  doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(15,23,42);
+  doc.text(dateReceivedStr || '—', margin+40, y);
+  doc.setDrawColor(200,200,200); doc.setLineWidth(0.3);
+  doc.line(margin+38, y+1.5, pageW-margin, y+1.5);
+  y += 9;
 
   // Footer on each page
   const pageCount = doc.getNumberOfPages();
