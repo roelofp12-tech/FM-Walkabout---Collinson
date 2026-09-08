@@ -668,6 +668,11 @@ input[type=file]{display:none}
       <div class="hc-name">REACTIVE MAINTENANCE</div>
       <div class="hc-desc">Unblock a toilet · Replace a seat · Adjust a closer · Between walkabouts</div>
     </div>
+    <div class="home-card" onclick="openLandlordJobCard()">
+      <div class="hc-icon">🏢</div>
+      <div class="hc-name">LANDLORD JOB CARD</div>
+      <div class="hc-desc">Work done for the Landlord · Generates a formal DNC Job Card PDF</div>
+    </div>
     <div class="home-card" onclick="viewDailyReportsDirect()">
       <div class="hc-icon">📊</div>
       <div class="hc-name">DAILY REPORTS</div>
@@ -5497,7 +5502,17 @@ function getReactiveMaintEntries(){
 function addReactiveMaintRecord(entry){
   const all=getReactiveMaintEntries();
   if(!all[entry.date])all[entry.date]=[];
+  if(!entry.id) entry.id=genEntryId();
   all[entry.date].push(entry);
+  localStorage.setItem('fm_reactive_maint_entries',JSON.stringify(all));
+}
+function updateReactiveMaintRecord(date, id, patch){
+  const all=getReactiveMaintEntries();
+  const list=all[date]||[];
+  const idx=list.findIndex(e=>e.id===id);
+  if(idx===-1) return;
+  list[idx]=Object.assign({}, list[idx], patch);
+  all[date]=list;
   localStorage.setItem('fm_reactive_maint_entries',JSON.stringify(all));
 }
 
@@ -5543,7 +5558,7 @@ function openReactiveMaintenance(){
         <button class="btn btn-green" onclick="submitReactiveMaintenance()">Save Entry</button>
       </div>
       <button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="submitNoReactiveMaintenance()">✅ No Reactive Maintenance This Round</button>
-      <button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="openReactiveMaintSignOff()">📝 Facilities Manager Sign-Off &amp; Export PDF</button>
+      <button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="openReactiveMaintSignOff()">📝 View Jobs &amp; Sign Off</button>
     </div>`;
   document.body.appendChild(overlay);
 }
@@ -5557,6 +5572,10 @@ function closeReactiveMaintenance(){
 // blank cell always means "not checked yet" rather than being ambiguous
 // with "checked, nothing needed" — same fix Contractor On-Site already
 // has via submitNoContractor().
+// Saves locally FIRST, then syncs to the Sheet best-effort — same
+// resilient pattern Callouts already uses, so a job is never lost (and
+// can still be found and signed off later) just because signal was bad
+// when it was logged.
 function submitNoReactiveMaintenance(){
   const slotKey = document.getElementById('rm-slot').value;
   const staff = document.getElementById('rm-staff').value;
@@ -5564,16 +5583,17 @@ function submitNoReactiveMaintenance(){
   const dateVal = today();
   const day = new Date().toLocaleDateString('en-ZA',{weekday:'short'});
 
+  addReactiveMaintRecord({
+    date: dateVal, day: day, slot: slot.key, row: slot.row, staff: staff,
+    none: true, loggedBy: staff
+  });
+  closeReactiveMaintenance();
+  showDayReports();
+
   postToSheet('cleaning_row', { date: dateVal, row: slot.row, text: 'NONE', loggedBy: staff }).then(()=>{
-    addReactiveMaintRecord({
-      date: dateVal, day: day, slot: slot.key, row: slot.row, staff: staff,
-      none: true, loggedBy: staff
-    });
     showToast('Recorded: No reactive maintenance ✓','ok');
-    closeReactiveMaintenance();
-    showDayReports();
   }).catch(()=>{
-    showToast('Save failed — check WEBAPP_URL / connection','err');
+    showToast('Saved locally, but Sheet sync failed — check connection','err');
   });
 }
 
@@ -5597,7 +5617,15 @@ function submitReactiveMaintenance(){
   const noteText = 'REACTIVE MAINT (' + staff + '): ' + category + ' — ' + description +
     ' [' + statusLabel + ', ' + minutes + ' mins]';
 
-  const jobs = [
+  addReactiveMaintRecord({
+    date: dateVal, day: day, slot: slot.key, row: slot.row, staff: staff,
+    category: category, description: description, minutes: minutes,
+    status: status, loggedBy: staff
+  });
+  closeReactiveMaintenance();
+  showDayReports();
+
+  Promise.all([
     // Broadcast a short note across H:AE on the matching row — same
     // mechanism Cleaning / Contractor On-Site already use.
     postToSheet('cleaning_row', { date: dateVal, row: slot.row, text: noteText, loggedBy: staff }),
@@ -5607,19 +5635,10 @@ function submitReactiveMaintenance(){
       date: dateVal, day: day, category: category, description: description,
       status: status, minutes: minutes, notes: '', loggedBy: staff
     })
-  ];
-
-  Promise.all(jobs).then(()=>{
-    addReactiveMaintRecord({
-      date: dateVal, day: day, slot: slot.key, row: slot.row, staff: staff,
-      category: category, description: description, minutes: minutes,
-      status: status, loggedBy: staff
-    });
+  ]).then(()=>{
     showToast('Reactive maintenance saved ✓','ok');
-    closeReactiveMaintenance();
-    showDayReports();
   }).catch(()=>{
-    showToast('Save failed — check WEBAPP_URL / connection','err');
+    showToast('Saved locally, but Sheet sync failed — check connection','err');
   });
 }
 
@@ -5694,59 +5713,25 @@ function sigPadDataUrl(canvasId){
   return canvas ? canvas.toDataURL('image/png') : null;
 }
 
-function getReactiveSignOffs(){
-  try{return JSON.parse(localStorage.getItem('fm_reactive_signoffs')||'{}');}catch(e){return{};}
-}
-function addReactiveSignOff(entry){
-  const all=getReactiveSignOffs();
-  if(!all[entry.date]) all[entry.date]=[];
-  all[entry.date].push(entry);
-  localStorage.setItem('fm_reactive_signoffs', JSON.stringify(all));
+// Stable per-entry id so an individual job (reactive maintenance item,
+// callout, etc) can be looked up and signed off on its own, independent
+// of its position in that date's array.
+function genEntryId(){
+  return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 }
 
+// Per-job sign-off: opens a list of that date's jobs (each showing its own
+// signed/unsigned status); tapping a job signs off THAT job only, storing
+// the signature directly on the entry (entry.signOff) rather than one
+// signature covering every job logged that day.
 function openReactiveMaintSignOff(){
   closeReactiveMaintenance();
   const overlay=document.createElement('div');
   overlay.className='modal-overlay show';
   overlay.id='rm-signoff-overlay';
   overlay.onclick=function(e){ if(e.target===overlay) closeReactiveMaintSignOff(); };
-  const dateVal=today();
-  overlay.innerHTML=`
-    <div class="handover-modal" style="max-width:460px;margin:auto;padding:20px;max-height:92vh;overflow-y:auto">
-      <h3 style="margin:0 0 4px">📝 Facilities Manager Sign-Off</h3>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Reactive maintenance — confirm work completed</div>
-
-      <label style="font-size:12px;color:var(--muted)">Date</label>
-      <input id="rmso-date" type="date" value="${dateVal}"
-        style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text)"
-        onchange="renderRmSignOffEntries()">
-
-      <div id="rmso-entries" style="margin-bottom:14px"></div>
-
-      <label style="font-size:12px;color:var(--muted)">Facilities Manager Name</label>
-      <input id="rmso-name" type="text" placeholder="Full name"
-        style="width:100%;padding:10px;margin:4px 0 16px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text)">
-
-      <div class="sig-label-row">
-        <label style="font-size:12px;color:var(--muted)">Sign below (finger or stylus)</label>
-        <span class="sig-clear-link" onclick="clearSigPad('rmso-sig')">Clear</span>
-      </div>
-      <div class="sig-pad-wrap">
-        <canvas id="rmso-sig" class="sig-canvas"></canvas>
-        <div id="rmso-sig-ph" class="sig-placeholder">Sign here</div>
-      </div>
-      <div style="font-size:10px;color:var(--muted);margin:8px 0 16px">
-        By signing, you confirm the reactive maintenance work listed above was completed to your satisfaction.
-      </div>
-
-      <div class="btn-row">
-        <button class="btn btn-outline" onclick="closeReactiveMaintSignOff()">Cancel</button>
-        <button class="btn btn-green" onclick="submitReactiveMaintSignOff()">✅ Generate &amp; Download PDF</button>
-      </div>
-    </div>`;
   document.body.appendChild(overlay);
-  renderRmSignOffEntries();
-  setTimeout(()=>setupSignaturePad('rmso-sig'), 80);
+  renderRmSignOffList(today());
 }
 
 function closeReactiveMaintSignOff(){
@@ -5754,44 +5739,100 @@ function closeReactiveMaintSignOff(){
   if(el) el.remove();
 }
 
-function renderRmSignOffEntries(){
-  const dateEl=document.getElementById('rmso-date');
-  const el=document.getElementById('rmso-entries');
-  if(!dateEl||!el) return;
-  const dateVal=dateEl.value;
+function renderRmSignOffList(dateVal){
+  const overlay=document.getElementById('rm-signoff-overlay');
+  if(!overlay) return;
   const entries=((getReactiveMaintEntries()[dateVal])||[]).filter(e=>!e.none);
   const statusLabel={done:'✅ Completed',pending:'⏳ Pending',contractor:'🦺 Contractor Needed'};
-  if(entries.length===0){
-    el.innerHTML=`<div style="font-size:12px;color:var(--muted);padding:8px 0">No reactive maintenance items logged for ${formatDate(dateVal)} yet.</div>`;
-    return;
-  }
-  el.innerHTML=`<label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">Work being signed off (${entries.length})</label>` +
-    entries.map(e=>`
-      <div class="rm-entry-row">
-        <div class="rm-cat">${e.category}${e.staff?' · '+e.staff:''}</div>
-        <div class="rm-desc">${e.description||''}</div>
-        <div class="rm-meta">${e.minutes||0} min · ${statusLabel[e.status]||e.status||''}</div>
-      </div>`).join('');
+  overlay.innerHTML=`
+    <div class="handover-modal" style="max-width:460px;margin:auto;padding:20px;max-height:92vh;overflow-y:auto">
+      <h3 style="margin:0 0 4px">📝 Facilities Manager Sign-Off</h3>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Reactive maintenance — each job is signed off on its own</div>
+
+      <label style="font-size:12px;color:var(--muted)">Date</label>
+      <input id="rmso-date" type="date" value="${dateVal}"
+        style="width:100%;padding:10px;margin:4px 0 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text)"
+        onchange="renderRmSignOffList(this.value)">
+
+      <div id="rmso-list">
+        ${entries.length===0 ? `<div style="font-size:12px;color:var(--muted);padding:8px 0">No reactive maintenance items logged for ${formatDate(dateVal)}.</div>` :
+        entries.map(e=>`
+          <div class="rm-entry-row" style="display:flex;align-items:center;gap:10px">
+            <div style="flex:1;min-width:0">
+              <div class="rm-cat">${e.category}${e.staff?' · '+e.staff:''}</div>
+              <div class="rm-desc">${e.description||''}</div>
+              <div class="rm-meta">${e.minutes||0} min · ${statusLabel[e.status]||e.status||''}</div>
+              ${e.signOff ? `<div style="font-size:10px;color:#22c55e;margin-top:4px">✅ Signed by ${e.signOff.fmName} · ${new Date(e.signOff.signedAt).toLocaleString('en-ZA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+            </div>
+            <button class="btn ${e.signOff?'btn-outline':'btn-green'}" style="white-space:nowrap;flex-shrink:0;padding:8px 12px;font-size:11px" onclick="openReactiveMaintJobSignOff('${dateVal}','${e.id}')">${e.signOff?'Re-sign':'Sign Off'}</button>
+          </div>`).join('')}
+      </div>
+
+      <button class="btn btn-outline" style="width:100%;margin-top:16px" onclick="closeReactiveMaintSignOff()">Close</button>
+    </div>`;
 }
 
-function submitReactiveMaintSignOff(){
-  const dateVal=document.getElementById('rmso-date').value;
-  const fmName=document.getElementById('rmso-name').value.trim();
-  if(!fmName){ showToast('Please enter the Facilities Manager\'s name','err'); return; }
-  if(sigPadIsEmpty('rmso-sig')){ showToast('Please sign before exporting','err'); return; }
+function openReactiveMaintJobSignOff(dateVal, id){
+  const overlay=document.getElementById('rm-signoff-overlay');
+  const entry=((getReactiveMaintEntries()[dateVal])||[]).find(e=>e.id===id);
+  if(!overlay||!entry){ showToast('Entry not found','err'); return; }
+  const statusLabel={done:'✅ Completed',pending:'⏳ Pending',contractor:'🦺 Contractor Needed'};
+  const already=entry.signOff;
+  overlay.innerHTML=`
+    <div class="handover-modal" style="max-width:460px;margin:auto;padding:20px;max-height:92vh;overflow-y:auto">
+      <h3 style="margin:0 0 4px">📝 Sign Off This Job</h3>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">${formatDate(dateVal)}</div>
 
-  const entries=((getReactiveMaintEntries()[dateVal])||[]).filter(e=>!e.none);
-  const sigDataUrl=sigPadDataUrl('rmso-sig');
+      <div class="rm-entry-row" style="margin-bottom:16px">
+        <div class="rm-cat">${entry.category}${entry.staff?' · '+entry.staff:''}</div>
+        <div class="rm-desc">${entry.description||''}</div>
+        <div class="rm-meta">${entry.minutes||0} min · ${statusLabel[entry.status]||entry.status||''}</div>
+      </div>
+      ${already ? `<div style="font-size:11px;color:#f59e0b;margin-bottom:14px">Already signed by ${already.fmName} on ${new Date(already.signedAt).toLocaleString('en-ZA')}. Signing again replaces this.</div>` : ''}
+
+      <label style="font-size:12px;color:var(--muted)">Facilities Manager Name</label>
+      <input id="rmjso-name" type="text" placeholder="Full name" value="${already?already.fmName:''}"
+        style="width:100%;padding:10px;margin:4px 0 16px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text)">
+
+      <div class="sig-label-row">
+        <label style="font-size:12px;color:var(--muted)">Sign below (finger or stylus)</label>
+        <span class="sig-clear-link" onclick="clearSigPad('rmjso-sig')">Clear</span>
+      </div>
+      <div class="sig-pad-wrap" style="flex-shrink:0">
+        <canvas id="rmjso-sig" class="sig-canvas"></canvas>
+        <div id="rmjso-sig-ph" class="sig-placeholder">Sign here</div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin:8px 0 16px">
+        By signing, you confirm this specific job was completed to your satisfaction.
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-outline" onclick="renderRmSignOffList('${dateVal}')">← Back to list</button>
+        <button class="btn btn-green" onclick="submitReactiveMaintJobSignOff('${dateVal}','${id}')">✅ Generate &amp; Download PDF</button>
+      </div>
+    </div>`;
+  setTimeout(()=>setupSignaturePad('rmjso-sig'), 80);
+}
+
+function submitReactiveMaintJobSignOff(dateVal, id){
+  const fmName=document.getElementById('rmjso-name').value.trim();
+  if(!fmName){ showToast('Please enter the Facilities Manager\'s name','err'); return; }
+  if(sigPadIsEmpty('rmjso-sig')){ showToast('Please sign before exporting','err'); return; }
+
+  const entry=((getReactiveMaintEntries()[dateVal])||[]).find(e=>e.id===id);
+  if(!entry){ showToast('Entry not found','err'); return; }
+
+  const sigDataUrl=sigPadDataUrl('rmjso-sig');
   const signedAt=new Date();
 
-  buildReactiveMaintSignOffPdf(dateVal, fmName, entries, sigDataUrl, signedAt);
+  buildReactiveMaintJobPdf(dateVal, entry, fmName, sigDataUrl, signedAt);
 
-  addReactiveSignOff({date:dateVal, fmName:fmName, signedAt:signedAt.toISOString(), itemCount:entries.length});
+  updateReactiveMaintRecord(dateVal, id, {signOff:{fmName:fmName, signedAt:signedAt.toISOString()}});
   showToast('Sign-off PDF downloaded ✓','ok');
-  closeReactiveMaintSignOff();
+  renderRmSignOffList(dateVal);
 }
 
-function buildReactiveMaintSignOffPdf(dateVal, fmName, entries, sigDataUrl, signedAt){
+function buildReactiveMaintJobPdf(dateVal, entry, fmName, sigDataUrl, signedAt){
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const margin=14, pageW=210, pageH=297, maxY=pageH-24;
@@ -5803,7 +5844,7 @@ function buildReactiveMaintSignOffPdf(dateVal, fmName, entries, sigDataUrl, sign
   doc.setTextColor(255,255,255); doc.setFontSize(16); doc.setFont('helvetica','bold');
   doc.text('COLLINSON FM — REACTIVE MAINTENANCE',margin,15);
   doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(148,163,184);
-  doc.text('Facilities Manager Sign-Off',margin,23);
+  doc.text('Facilities Manager Sign-Off — Single Job',margin,23);
   doc.text(ds,pageW-margin,23,{align:'right'});
 
   let y=42;
@@ -5811,25 +5852,15 @@ function buildReactiveMaintSignOffPdf(dateVal, fmName, entries, sigDataUrl, sign
   doc.text('Work Completed', margin, y); y+=3;
   doc.setDrawColor(200,210,220); doc.line(margin,y,pageW-margin,y); y+=8;
 
-  doc.setFont('helvetica','normal'); doc.setFontSize(9);
-  if(entries.length===0){
-    doc.setTextColor(100,116,139);
-    doc.text('No reactive maintenance items were logged for this date.', margin, y); y+=8;
-  } else {
-    entries.forEach((e,i)=>{
-      if(y>maxY){doc.addPage();y=20;}
-      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(15,23,42);
-      doc.text(`${i+1}. ${e.category||'—'}`, margin, y); y+=5;
-      doc.setFont('helvetica','normal'); doc.setTextColor(51,65,85);
-      const descLines=doc.splitTextToSize(e.description||'', pageW-margin*2-4);
-      descLines.forEach(l=>{ if(y>maxY){doc.addPage();y=20;} doc.text(l, margin+4, y); y+=5; });
-      doc.setFontSize(8); doc.setTextColor(100,116,139);
-      doc.text(`${statusLabel[e.status]||e.status||''} · ${e.minutes||0} min · Done by ${e.staff||'—'}`, margin+4, y); y+=7;
-      doc.setFontSize(9);
-    });
-  }
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(15,23,42);
+  doc.text(entry.category||'—', margin, y); y+=6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(51,65,85);
+  const descLines=doc.splitTextToSize(entry.description||'', pageW-margin*2);
+  descLines.forEach(l=>{ if(y>maxY){doc.addPage();y=20;} doc.text(l, margin, y); y+=5.5; });
+  y+=2;
+  doc.setFontSize(8); doc.setTextColor(100,116,139);
+  doc.text(`${statusLabel[entry.status]||entry.status||''} · ${entry.minutes||0} min · Done by ${entry.staff||'—'}`, margin, y); y+=10;
 
-  y+=4;
   if(y>maxY-64){doc.addPage();y=20;}
   doc.setDrawColor(200,210,220); doc.line(margin,y,pageW-margin,y); y+=10;
 
@@ -5856,7 +5887,8 @@ function buildReactiveMaintSignOffPdf(dateVal, fmName, entries, sigDataUrl, sign
   doc.text('To be emailed together with the separate cost sheet.', margin, pageH-8);
 
   const safeName=fmName.replace(/[^a-z0-9]+/gi,'_');
-  doc.save('Collinson_ReactiveMaint_SignOff_'+dateVal+'_'+safeName+'.pdf');
+  const safeCat=(entry.category||'job').replace(/[^a-z0-9]+/gi,'_');
+  doc.save('Collinson_ReactiveMaint_SignOff_'+dateVal+'_'+safeCat+'_'+safeName+'.pdf');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -5881,6 +5913,7 @@ function getCalloutEntries(){
 function addCalloutRecord(entry){
   const all=getCalloutEntries();
   if(!all[entry.date])all[entry.date]=[];
+  if(!entry.id) entry.id=genEntryId();
   // "No callout today" clears the day back to just that single line, same
   // convention as Contractor On-Site's submitNoContractor().
   if(entry.none){
@@ -5891,6 +5924,15 @@ function addCalloutRecord(entry){
   }
   localStorage.setItem('fm_callout_entries',JSON.stringify(all));
   return all[entry.date];
+}
+function updateCalloutRecord(date, id, patch){
+  const all=getCalloutEntries();
+  const list=all[date]||[];
+  const idx=list.findIndex(e=>e.id===id);
+  if(idx===-1) return;
+  list[idx]=Object.assign({}, list[idx], patch);
+  all[date]=list;
+  localStorage.setItem('fm_callout_entries',JSON.stringify(all));
 }
 function buildCalloutSummaryText(dateKey){
   const list=(getCalloutEntries()[dateKey]||[]);
@@ -5940,7 +5982,7 @@ function openCallout(){
         <button class="btn btn-green" onclick="submitCallout()">Save Entry</button>
       </div>
       <button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="submitNoCallout()">🚫 No Callout Today</button>
-      <button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="openCalloutSignOff()">📝 Facilities Manager Sign-Off &amp; Export PDF</button>
+      <button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="openCalloutSignOff()">📝 View Jobs &amp; Sign Off</button>
     </div>`;
   document.body.appendChild(overlay);
 }
@@ -5989,59 +6031,17 @@ function submitNoCallout(){
 }
 
 // ── FACILITIES MANAGER SIGN-OFF — Callouts ──
-function getCalloutSignOffs(){
-  try{return JSON.parse(localStorage.getItem('fm_callout_signoffs')||'{}');}catch(e){return{};}
-}
-function addCalloutSignOff(entry){
-  const all=getCalloutSignOffs();
-  if(!all[entry.date]) all[entry.date]=[];
-  all[entry.date].push(entry);
-  localStorage.setItem('fm_callout_signoffs', JSON.stringify(all));
-}
-
+// Per-job sign-off: same pattern as Reactive Maintenance above — a list of
+// that date's callouts each with its own signed/unsigned status, tapping
+// one signs off THAT callout only (entry.signOff), not the whole day at once.
 function openCalloutSignOff(){
   closeCallout();
   const overlay=document.createElement('div');
   overlay.className='modal-overlay show';
   overlay.id='callout-signoff-overlay';
   overlay.onclick=function(e){ if(e.target===overlay) closeCalloutSignOff(); };
-  const dateVal=today();
-  overlay.innerHTML=`
-    <div class="handover-modal" style="max-width:460px;margin:auto;padding:20px;max-height:92vh;overflow-y:auto">
-      <h3 style="margin:0 0 4px">📝 Facilities Manager Sign-Off</h3>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Callouts — acknowledge callout(s) on this date</div>
-
-      <label style="font-size:12px;color:var(--muted)">Date</label>
-      <input id="calso-date" type="date" value="${dateVal}"
-        style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text)"
-        onchange="renderCalloutSignOffEntries()">
-
-      <div id="calso-entries" style="margin-bottom:14px"></div>
-
-      <label style="font-size:12px;color:var(--muted)">Facilities Manager Name</label>
-      <input id="calso-name" type="text" placeholder="Full name"
-        style="width:100%;padding:10px;margin:4px 0 16px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text)">
-
-      <div class="sig-label-row">
-        <label style="font-size:12px;color:var(--muted)">Sign below (finger or stylus)</label>
-        <span class="sig-clear-link" onclick="clearSigPad('calso-sig')">Clear</span>
-      </div>
-      <div class="sig-pad-wrap">
-        <canvas id="calso-sig" class="sig-canvas"></canvas>
-        <div id="calso-sig-ph" class="sig-placeholder">Sign here</div>
-      </div>
-      <div style="font-size:10px;color:var(--muted);margin:8px 0 16px">
-        By signing, you confirm the callout(s) listed above are acknowledged.
-      </div>
-
-      <div class="btn-row">
-        <button class="btn btn-outline" onclick="closeCalloutSignOff()">Cancel</button>
-        <button class="btn btn-green" onclick="submitCalloutSignOff()">✅ Generate &amp; Download PDF</button>
-      </div>
-    </div>`;
   document.body.appendChild(overlay);
-  renderCalloutSignOffEntries();
-  setTimeout(()=>setupSignaturePad('calso-sig'), 80);
+  renderCalloutSignOffList(today());
 }
 
 function closeCalloutSignOff(){
@@ -6049,44 +6049,100 @@ function closeCalloutSignOff(){
   if(el) el.remove();
 }
 
-function renderCalloutSignOffEntries(){
-  const dateEl=document.getElementById('calso-date');
-  const el=document.getElementById('calso-entries');
-  if(!dateEl||!el) return;
-  const dateVal=dateEl.value;
+function renderCalloutSignOffList(dateVal){
+  const overlay=document.getElementById('callout-signoff-overlay');
+  if(!overlay) return;
   const entries=((getCalloutEntries()[dateVal])||[]).filter(e=>!e.none);
   const statusLabel={done:'✅ Completed',pending:'⏳ Pending',onsite:'🔧 Still On Site'};
-  if(entries.length===0){
-    el.innerHTML=`<div style="font-size:12px;color:var(--muted);padding:8px 0">No callouts logged for ${formatDate(dateVal)} yet.</div>`;
-    return;
-  }
-  el.innerHTML=`<label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">Callouts being signed off (${entries.length})</label>` +
-    entries.map(e=>`
-      <div class="rm-entry-row">
-        <div class="rm-cat">${e.company}${e.party?' · '+e.party:''}</div>
-        <div class="rm-desc">${e.reason||''}</div>
-        <div class="rm-meta">${e.start}–${e.end} · ${statusLabel[e.status]||e.status||''}</div>
-      </div>`).join('');
+  overlay.innerHTML=`
+    <div class="handover-modal" style="max-width:460px;margin:auto;padding:20px;max-height:92vh;overflow-y:auto">
+      <h3 style="margin:0 0 4px">📝 Facilities Manager Sign-Off</h3>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Callouts — each job is signed off on its own</div>
+
+      <label style="font-size:12px;color:var(--muted)">Date</label>
+      <input id="calso-date" type="date" value="${dateVal}"
+        style="width:100%;padding:10px;margin:4px 0 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text)"
+        onchange="renderCalloutSignOffList(this.value)">
+
+      <div id="calso-list">
+        ${entries.length===0 ? `<div style="font-size:12px;color:var(--muted);padding:8px 0">No callouts logged for ${formatDate(dateVal)}.</div>` :
+        entries.map(e=>`
+          <div class="rm-entry-row" style="display:flex;align-items:center;gap:10px">
+            <div style="flex:1;min-width:0">
+              <div class="rm-cat">${e.company}${e.party?' · '+e.party:''}</div>
+              <div class="rm-desc">${e.reason||''}</div>
+              <div class="rm-meta">${e.start}–${e.end} · ${statusLabel[e.status]||e.status||''}</div>
+              ${e.signOff ? `<div style="font-size:10px;color:#22c55e;margin-top:4px">✅ Signed by ${e.signOff.fmName} · ${new Date(e.signOff.signedAt).toLocaleString('en-ZA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+            </div>
+            <button class="btn ${e.signOff?'btn-outline':'btn-green'}" style="white-space:nowrap;flex-shrink:0;padding:8px 12px;font-size:11px" onclick="openCalloutJobSignOff('${dateVal}','${e.id}')">${e.signOff?'Re-sign':'Sign Off'}</button>
+          </div>`).join('')}
+      </div>
+
+      <button class="btn btn-outline" style="width:100%;margin-top:16px" onclick="closeCalloutSignOff()">Close</button>
+    </div>`;
 }
 
-function submitCalloutSignOff(){
-  const dateVal=document.getElementById('calso-date').value;
-  const fmName=document.getElementById('calso-name').value.trim();
-  if(!fmName){ showToast('Please enter the Facilities Manager\'s name','err'); return; }
-  if(sigPadIsEmpty('calso-sig')){ showToast('Please sign before exporting','err'); return; }
+function openCalloutJobSignOff(dateVal, id){
+  const overlay=document.getElementById('callout-signoff-overlay');
+  const entry=((getCalloutEntries()[dateVal])||[]).find(e=>e.id===id);
+  if(!overlay||!entry){ showToast('Entry not found','err'); return; }
+  const statusLabel={done:'✅ Completed',pending:'⏳ Pending',onsite:'🔧 Still On Site'};
+  const already=entry.signOff;
+  overlay.innerHTML=`
+    <div class="handover-modal" style="max-width:460px;margin:auto;padding:20px;max-height:92vh;overflow-y:auto">
+      <h3 style="margin:0 0 4px">📝 Sign Off This Callout</h3>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">${formatDate(dateVal)}</div>
 
-  const entries=((getCalloutEntries()[dateVal])||[]).filter(e=>!e.none);
-  const sigDataUrl=sigPadDataUrl('calso-sig');
+      <div class="rm-entry-row" style="margin-bottom:16px">
+        <div class="rm-cat">${entry.company}${entry.party?' · '+entry.party:''}</div>
+        <div class="rm-desc">${entry.reason||''}</div>
+        <div class="rm-meta">${entry.start}–${entry.end} · ${statusLabel[entry.status]||entry.status||''}</div>
+      </div>
+      ${already ? `<div style="font-size:11px;color:#f59e0b;margin-bottom:14px">Already signed by ${already.fmName} on ${new Date(already.signedAt).toLocaleString('en-ZA')}. Signing again replaces this.</div>` : ''}
+
+      <label style="font-size:12px;color:var(--muted)">Facilities Manager Name</label>
+      <input id="caljso-name" type="text" placeholder="Full name" value="${already?already.fmName:''}"
+        style="width:100%;padding:10px;margin:4px 0 16px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text)">
+
+      <div class="sig-label-row">
+        <label style="font-size:12px;color:var(--muted)">Sign below (finger or stylus)</label>
+        <span class="sig-clear-link" onclick="clearSigPad('caljso-sig')">Clear</span>
+      </div>
+      <div class="sig-pad-wrap" style="flex-shrink:0">
+        <canvas id="caljso-sig" class="sig-canvas"></canvas>
+        <div id="caljso-sig-ph" class="sig-placeholder">Sign here</div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin:8px 0 16px">
+        By signing, you confirm this specific callout is acknowledged.
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-outline" onclick="renderCalloutSignOffList('${dateVal}')">← Back to list</button>
+        <button class="btn btn-green" onclick="submitCalloutJobSignOff('${dateVal}','${id}')">✅ Generate &amp; Download PDF</button>
+      </div>
+    </div>`;
+  setTimeout(()=>setupSignaturePad('caljso-sig'), 80);
+}
+
+function submitCalloutJobSignOff(dateVal, id){
+  const fmName=document.getElementById('caljso-name').value.trim();
+  if(!fmName){ showToast('Please enter the Facilities Manager\'s name','err'); return; }
+  if(sigPadIsEmpty('caljso-sig')){ showToast('Please sign before exporting','err'); return; }
+
+  const entry=((getCalloutEntries()[dateVal])||[]).find(e=>e.id===id);
+  if(!entry){ showToast('Entry not found','err'); return; }
+
+  const sigDataUrl=sigPadDataUrl('caljso-sig');
   const signedAt=new Date();
 
-  buildCalloutSignOffPdf(dateVal, fmName, entries, sigDataUrl, signedAt);
+  buildCalloutJobPdf(dateVal, entry, fmName, sigDataUrl, signedAt);
 
-  addCalloutSignOff({date:dateVal, fmName:fmName, signedAt:signedAt.toISOString(), itemCount:entries.length});
+  updateCalloutRecord(dateVal, id, {signOff:{fmName:fmName, signedAt:signedAt.toISOString()}});
   showToast('Sign-off PDF downloaded ✓','ok');
-  closeCalloutSignOff();
+  renderCalloutSignOffList(dateVal);
 }
 
-function buildCalloutSignOffPdf(dateVal, fmName, entries, sigDataUrl, signedAt){
+function buildCalloutJobPdf(dateVal, entry, fmName, sigDataUrl, signedAt){
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const margin=14, pageW=210, pageH=297, maxY=pageH-24;
@@ -6097,33 +6153,23 @@ function buildCalloutSignOffPdf(dateVal, fmName, entries, sigDataUrl, signedAt){
   doc.setTextColor(255,255,255); doc.setFontSize(16); doc.setFont('helvetica','bold');
   doc.text('COLLINSON FM — CALLOUTS',margin,15);
   doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(148,163,184);
-  doc.text('Facilities Manager Sign-Off',margin,23);
+  doc.text('Facilities Manager Sign-Off — Single Callout',margin,23);
   doc.text(ds,pageW-margin,23,{align:'right'});
 
   let y=42;
   doc.setTextColor(15,23,42); doc.setFontSize(11); doc.setFont('helvetica','bold');
-  doc.text('Callouts', margin, y); y+=3;
+  doc.text('Callout', margin, y); y+=3;
   doc.setDrawColor(200,210,220); doc.line(margin,y,pageW-margin,y); y+=8;
 
-  doc.setFont('helvetica','normal'); doc.setFontSize(9);
-  if(entries.length===0){
-    doc.setTextColor(100,116,139);
-    doc.text('No callouts were logged for this date.', margin, y); y+=8;
-  } else {
-    entries.forEach((e,i)=>{
-      if(y>maxY){doc.addPage();y=20;}
-      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(15,23,42);
-      doc.text(`${i+1}. ${e.company||'—'}`, margin, y); y+=5;
-      doc.setFont('helvetica','normal'); doc.setTextColor(51,65,85);
-      const descLines=doc.splitTextToSize(e.reason||'', pageW-margin*2-4);
-      descLines.forEach(l=>{ if(y>maxY){doc.addPage();y=20;} doc.text(l, margin+4, y); y+=5; });
-      doc.setFontSize(8); doc.setTextColor(100,116,139);
-      doc.text(`${e.start||'—'}–${e.end||'—'} · ${statusLabel[e.status]||e.status||''}${e.party?' · '+e.party:''}`, margin+4, y); y+=7;
-      doc.setFontSize(9);
-    });
-  }
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(15,23,42);
+  doc.text(entry.company||'—', margin, y); y+=6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(51,65,85);
+  const descLines=doc.splitTextToSize(entry.reason||'', pageW-margin*2);
+  descLines.forEach(l=>{ if(y>maxY){doc.addPage();y=20;} doc.text(l, margin, y); y+=5.5; });
+  y+=2;
+  doc.setFontSize(8); doc.setTextColor(100,116,139);
+  doc.text(`${entry.start||'—'}–${entry.end||'—'} · ${statusLabel[entry.status]||entry.status||''}${entry.party?' · '+entry.party:''}`, margin, y); y+=10;
 
-  y+=4;
   if(y>maxY-64){doc.addPage();y=20;}
   doc.setDrawColor(200,210,220); doc.line(margin,y,pageW-margin,y); y+=10;
 
@@ -6149,7 +6195,293 @@ function buildCalloutSignOffPdf(dateVal, fmName, entries, sigDataUrl, signedAt){
   doc.text('Generated by Collinson FM Suite · '+new Date().toLocaleString('en-ZA'), margin, pageH-12);
 
   const safeName=fmName.replace(/[^a-z0-9]+/gi,'_');
-  doc.save('Collinson_Callout_SignOff_'+dateVal+'_'+safeName+'.pdf');
+  const safeCompany=(entry.company||'callout').replace(/[^a-z0-9]+/gi,'_');
+  doc.save('Collinson_Callout_SignOff_'+dateVal+'_'+safeCompany+'_'+safeName+'.pdf');
+}
+
+// ═══════════════════════════════════════════════════════════
+// LANDLORD JOB CARD — work DNC performs directly for the Landlord
+// (as opposed to Collinson/tenant work), documented and signed off as
+// a single formal DNC-branded Job Card per job. Own numbering series
+// (DNC/JC/L-###, separate from the standalone Job Card Generator app's
+// own DNC/JC/### counter) and its own Google Sheet sync type
+// ('landlord_jobcard'). Sign-off follows the same on-screen
+// canvas-signature pattern as the rest of the suite, captured from
+// both the DNC representative who completed the work and the Landlord
+// representative who received/approved it.
+// ═══════════════════════════════════════════════════════════
+const JOBCARD_STATUSES = [
+  {s:'done',    label:'✅ Completed'},
+  {s:'pending', label:'⏳ Pending'},
+  {s:'progress',label:'🔧 In Progress'}
+];
+
+function getLandlordJobCards(){
+  try{return JSON.parse(localStorage.getItem('fm_landlord_jobcards')||'{}');}catch(e){return{};}
+}
+function addLandlordJobCardRecord(entry){
+  const all=getLandlordJobCards();
+  if(!all[entry.date])all[entry.date]=[];
+  all[entry.date].push(entry);
+  localStorage.setItem('fm_landlord_jobcards',JSON.stringify(all));
+  return all[entry.date];
+}
+// Peek at the next number without consuming it (for display while the
+// form is open); pass commit:true only once, at the moment the job
+// card is actually saved, so cancelled/abandoned forms don't burn a number.
+function nextLandlordJobCardNo(commit){
+  const seq = parseInt(localStorage.getItem('fm_landlord_jobcard_seq')||'0',10);
+  const next = seq+1;
+  if(commit) localStorage.setItem('fm_landlord_jobcard_seq', String(next));
+  return 'DNC/JC/L-'+String(next).padStart(3,'0');
+}
+
+function openLandlordJobCard(){
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay show';
+  overlay.id='ljc-overlay';
+  overlay.onclick=function(e){ if(e.target===overlay) closeLandlordJobCard(); };
+  const dateVal=today();
+  const jobNo=nextLandlordJobCardNo(false);
+  const dncName=(typeof inspector!=='undefined' && inspector && inspector.name) || (typeof currentUser!=='undefined' && currentUser && currentUser.name) || '';
+  overlay.innerHTML=`
+    <div class="handover-modal" style="max-width:460px;margin:auto;padding:20px;max-height:92vh;overflow-y:auto">
+      <h3 style="margin:0 0 4px">🏢 Landlord Job Card</h3>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Work performed for the Landlord — generates a formal DNC Job Card</div>
+
+      <div style="display:flex;gap:8px">
+        <div style="flex:1">
+          <label style="font-size:12px;color:var(--muted)">Job Card No.</label>
+          <input id="ljc-jobno" type="text" value="${jobNo}" readonly
+            style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px;background:var(--faint);border:1px solid var(--border);color:var(--text);font-family:var(--mono)">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:12px;color:var(--muted)">Date</label>
+          <input id="ljc-date" type="date" value="${dateVal}"
+            style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text)">
+        </div>
+      </div>
+
+      <label style="font-size:12px;color:var(--muted)">Site / Building Address</label>
+      <input id="ljc-site" type="text" placeholder="Type the full site / building address" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px">
+
+      <label style="font-size:12px;color:var(--muted)">Requested By (Landlord contact)</label>
+      <input id="ljc-reqby" type="text" placeholder="Name" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px">
+
+      <label style="font-size:12px;color:var(--muted)">Description of Work</label>
+      <textarea id="ljc-desc" rows="3" placeholder="e.g. Replace ceiling tiles damaged by leak — 3rd floor lobby" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px"></textarea>
+
+      <label style="font-size:12px;color:var(--muted)">Materials Used (optional)</label>
+      <textarea id="ljc-materials" rows="2" placeholder="e.g. 4x ceiling tiles, adhesive" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px"></textarea>
+
+      <div style="display:flex;gap:8px">
+        <div style="flex:1">
+          <label style="font-size:12px;color:var(--muted)">Start</label>
+          <input id="ljc-start" type="time" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:12px;color:var(--muted)">End</label>
+          <input id="ljc-end" type="time" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px">
+        </div>
+      </div>
+
+      <label style="font-size:12px;color:var(--muted)">Status</label>
+      <select id="ljc-status" style="width:100%;padding:10px;margin:4px 0 16px;border-radius:8px">
+        ${JOBCARD_STATUSES.map(o=>`<option value="${o.s}">${o.label}</option>`).join('')}
+      </select>
+
+      <div style="border-top:1px solid var(--border);margin:4px 0 16px"></div>
+
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Completed By (DNC)</div>
+      <input id="ljc-dnc-name" type="text" value="${dncName}" placeholder="Name" style="width:100%;padding:10px;margin:4px 0 10px;border-radius:8px">
+      <div class="sig-label-row">
+        <label style="font-size:12px;color:var(--muted)">Signature</label>
+        <span class="sig-clear-link" onclick="clearSigPad('ljc-dnc-sig')">Clear</span>
+      </div>
+      <div class="sig-pad-wrap" style="flex-shrink:0">
+        <canvas id="ljc-dnc-sig" class="sig-canvas"></canvas>
+        <div id="ljc-dnc-sig-ph" class="sig-placeholder">Sign here</div>
+      </div>
+
+      <div style="font-size:12px;color:var(--muted);margin:16px 0 8px">Signed Off By (Landlord Representative)</div>
+      <input id="ljc-landlord-name" type="text" placeholder="Name" style="width:100%;padding:10px;margin:4px 0 10px;border-radius:8px">
+      <div class="sig-label-row">
+        <label style="font-size:12px;color:var(--muted)">Signature</label>
+        <span class="sig-clear-link" onclick="clearSigPad('ljc-landlord-sig')">Clear</span>
+      </div>
+      <div class="sig-pad-wrap" style="flex-shrink:0">
+        <canvas id="ljc-landlord-sig" class="sig-canvas"></canvas>
+        <div id="ljc-landlord-sig-ph" class="sig-placeholder">Sign here</div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin:8px 0 16px">
+        Both the Landlord representative's name and signature are required before the Job Card PDF can be generated.
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-outline" onclick="closeLandlordJobCard()">Cancel</button>
+        <button class="btn btn-green" onclick="submitLandlordJobCard()">✅ Generate &amp; Download Job Card</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(()=>{ setupSignaturePad('ljc-dnc-sig'); setupSignaturePad('ljc-landlord-sig'); }, 80);
+}
+
+function closeLandlordJobCard(){
+  const el=document.getElementById('ljc-overlay');
+  if(el) el.remove();
+}
+
+function submitLandlordJobCard(){
+  const dateVal   = document.getElementById('ljc-date').value;
+  const site      = document.getElementById('ljc-site').value.trim();
+  const reqBy     = document.getElementById('ljc-reqby').value.trim();
+  const desc      = document.getElementById('ljc-desc').value.trim();
+  const materials = document.getElementById('ljc-materials').value.trim();
+  const start     = document.getElementById('ljc-start').value;
+  const end       = document.getElementById('ljc-end').value;
+  const status    = document.getElementById('ljc-status').value;
+  const dncName   = document.getElementById('ljc-dnc-name').value.trim();
+  const landlordName = document.getElementById('ljc-landlord-name').value.trim();
+
+  if(!dateVal || !site || !desc){
+    showToast('Date, Site and Description of Work are required','err');
+    return;
+  }
+  if(!dncName || sigPadIsEmpty('ljc-dnc-sig')){
+    showToast('DNC name and signature are required','err');
+    return;
+  }
+  if(!landlordName || sigPadIsEmpty('ljc-landlord-sig')){
+    showToast('Landlord representative\'s name and signature are required before the Job Card can be generated','err');
+    return;
+  }
+
+  const jobNo = nextLandlordJobCardNo(true); // commit — consumes the number
+  const day = new Date(dateVal+'T12:00:00').toLocaleDateString('en-ZA',{weekday:'short'});
+  const signedAt = new Date();
+  const dncSigUrl = sigPadDataUrl('ljc-dnc-sig');
+  const landlordSigUrl = sigPadDataUrl('ljc-landlord-sig');
+  const loggedBy = (typeof inspector!=='undefined' && inspector && inspector.name) || (typeof currentUser!=='undefined' && currentUser && currentUser.name) || dncName;
+
+  const record = {
+    jobNo:jobNo, date:dateVal, day:day, site:site, reqBy:reqBy, desc:desc, materials:materials,
+    start:start, end:end, status:status, dncName:dncName, landlordName:landlordName,
+    signedAt:signedAt.toISOString(), loggedBy:loggedBy
+  };
+
+  buildLandlordJobCardPdf(record, dncSigUrl, landlordSigUrl, signedAt);
+  addLandlordJobCardRecord(record);
+
+  postToSheet('landlord_jobcard', {
+    jobNo:jobNo, date:dateVal, day:day, site:site, requestedBy:reqBy, description:desc,
+    materials:materials, start:start, end:end, status:status, dncName:dncName,
+    landlordName:landlordName, loggedBy:loggedBy
+  }).then(()=>{
+    showToast('Job Card '+jobNo+' saved ✓','ok');
+    closeLandlordJobCard();
+  }).catch(()=>{
+    showToast('Job Card '+jobNo+' saved locally, but Sheet sync failed — check connection','err');
+    closeLandlordJobCard();
+  });
+}
+
+function buildLandlordJobCardPdf(rec, dncSigUrl, landlordSigUrl, signedAt){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const margin=14, pageW=210, pageH=297, maxY=pageH-24;
+  const statusLabel={done:'Completed',pending:'Pending',progress:'In Progress'};
+  const ds=formatDate(rec.date);
+
+  // ── DNC branded header (black band, red wordmark, green tagline) ──
+  doc.setFillColor(10,10,10); doc.rect(0,0,pageW,32,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(220,38,38);
+  doc.text('DNC', margin, 16);
+  doc.setFontSize(9); doc.setTextColor(255,255,255); doc.setFont('helvetica','normal');
+  doc.text('CONTRACTING (PTY) LTD  t/a De Nobrega Group', margin, 22);
+  doc.setFontSize(8); doc.setTextColor(22,163,74);
+  doc.text('construction | contracting | consulting', margin, 27.5);
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255);
+  doc.text('JOB CARD', pageW-margin, 15, {align:'right'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(200,200,200);
+  doc.text(rec.jobNo, pageW-margin, 21, {align:'right'});
+  doc.text(ds, pageW-margin, 26, {align:'right'});
+
+  // ── company details strip ──
+  let y=39;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,100,100);
+  doc.text('Reg: 2020/066878/07   VAT: 4470304264 (15%)', margin, y);
+  y+=6;
+  doc.setDrawColor(220,38,38); doc.setLineWidth(0.6); doc.line(margin,y,pageW-margin,y);
+  doc.setLineWidth(0.2);
+  y+=9;
+
+  // ── job details ──
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(15,23,42);
+  doc.text('For: The Landlord', margin, y);
+  doc.text('Status: '+(statusLabel[rec.status]||rec.status||''), pageW-margin, y, {align:'right'});
+  y+=7;
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(51,65,85);
+  doc.splitTextToSize('Site / Building: '+(rec.site||'—'), pageW-margin*2).forEach(l=>{ if(y>maxY){doc.addPage();y=20;} doc.text(l,margin,y); y+=6; });
+  if(rec.reqBy){ doc.text('Requested By: '+rec.reqBy, margin, y); y+=6; }
+  if(rec.start || rec.end){ doc.text('Time on Site: '+(rec.start||'—')+' – '+(rec.end||'—'), margin, y); y+=6; }
+  y+=3;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(15,23,42);
+  doc.text('Description of Work', margin, y); y+=2;
+  doc.setDrawColor(200,210,220); doc.line(margin,y,pageW-margin,y); y+=6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(51,65,85);
+  doc.splitTextToSize(rec.desc||'—', pageW-margin*2).forEach(l=>{ if(y>maxY){doc.addPage();y=20;} doc.text(l,margin,y); y+=5.5; });
+  y+=4;
+
+  if(rec.materials){
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(15,23,42);
+    doc.text('Materials Used', margin, y); y+=2;
+    doc.setDrawColor(200,210,220); doc.line(margin,y,pageW-margin,y); y+=6;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(51,65,85);
+    doc.splitTextToSize(rec.materials, pageW-margin*2).forEach(l=>{ if(y>maxY){doc.addPage();y=20;} doc.text(l,margin,y); y+=5.5; });
+    y+=4;
+  }
+
+  // ── sign-off (two blocks side-by-side) ──
+  if(y>maxY-70){doc.addPage();y=20;}
+  y+=4;
+  doc.setDrawColor(200,210,220); doc.line(margin,y,pageW-margin,y); y+=10;
+
+  const colW=(pageW-margin*2-10)/2;
+  const col1X=margin, col2X=margin+colW+10;
+  const sigY=y, sigBoxW=colW, sigBoxH=26;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(15,23,42);
+  doc.text('Completed By (DNC)', col1X, y);
+  doc.text('Signed Off By (Landlord)', col2X, y);
+  y+=6;
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(30,41,59);
+  doc.text('Name: '+(rec.dncName||'—'), col1X, y);
+  doc.text('Name: '+(rec.landlordName||'—'), col2X, y);
+  y+=8;
+
+  doc.setDrawColor(200,210,220);
+  doc.rect(col1X, y, sigBoxW, sigBoxH);
+  doc.rect(col2X, y, sigBoxW, sigBoxH);
+  if(dncSigUrl){ try{ doc.addImage(dncSigUrl,'PNG', col1X+2, y+2, sigBoxW-4, sigBoxH-4, undefined, 'FAST'); }catch(err){} }
+  if(landlordSigUrl){ try{ doc.addImage(landlordSigUrl,'PNG', col2X+2, y+2, sigBoxW-4, sigBoxH-4, undefined, 'FAST'); }catch(err){} }
+  y+=sigBoxH+7;
+
+  doc.setFontSize(8); doc.setTextColor(100,116,139);
+  const stampText='Signed '+ds+' at '+signedAt.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
+  doc.text(stampText, col1X, y);
+  doc.text(stampText, col2X, y);
+  y+=12;
+
+  doc.setFontSize(8); doc.setTextColor(148,163,184);
+  doc.text('DNC Contracting (Pty) Ltd t/a De Nobrega Group · Generated via Collinson FM Suite · '+new Date().toLocaleString('en-ZA'), margin, pageH-10);
+
+  const safeSite=(rec.site||'site').replace(/[^a-z0-9]+/gi,'_');
+  const safeJobNo=rec.jobNo.replace(/[^a-z0-9]+/gi,'_');
+  doc.save('DNC_JobCard_'+safeJobNo+'_'+safeSite+'.pdf');
 }
 
 function submitManualEntry(){
