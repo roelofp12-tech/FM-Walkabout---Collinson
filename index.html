@@ -2473,10 +2473,10 @@ const ZONES = [
 const ROWS = [
   { row:4,  time:'06:00', label:'Arrival & Setup' },
   { row:6,  time:'08:30', label:'Building Check' },
-  { row:7,  time:'10:30', label:'Mid-Morning' },
-  { row:8,  time:'11:30', label:'Contractor Check' },
-  { row:11, time:'13:00', label:'Afternoon Rounds' },
-  { row:13, time:'15:30', label:'Mid-Afternoon' },
+  { row:7,  time:'09:00', label:'Mid-Morning' },
+  { row:8,  time:'10:30', label:'Contractor Check' },
+  { row:9,  time:'11:30', label:'Midday Walkabout' },
+  { row:13, time:'15:00', label:'Mid-Afternoon' },
   { row:16, time:'18:00', label:'Switch Off & Close' },
 ];
 
@@ -2934,7 +2934,7 @@ function getSpecialSteps(row) {
   if (row===6)  return ['breakers','lights','toilets_blocked','toilet_seats'];
   if (row===7)  return ['lights'];
   if (row===8)  return ['lights','contractors_yn'];
-  if (row===11) return ['cleaning_yn'];
+  if (row===9)  return ['cleaning_yn'];
   if (row===13) return ['contractors_status'];
   return [];
 }
