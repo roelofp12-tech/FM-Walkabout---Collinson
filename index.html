@@ -2473,14 +2473,23 @@ const ZONES = [
 const ROWS = [
   { row:4,  time:'06:00', label:'Arrival & Setup' },
   { row:6,  time:'08:30', label:'Building Check' },
-  { row:7,  time:'10:30', label:'Mid-Morning' },
-  { row:8,  time:'11:30', label:'Contractor Check' },
-  { row:11, time:'13:00', label:'Afternoon Rounds' },
-  { row:13, time:'15:30', label:'Mid-Afternoon' },
+  { row:7,  time:'09:00', label:'Mid-Morning' },
+  { row:8,  time:'10:30', label:'Contractor Check' },
+  { row:9,  time:'11:30', label:'Midday Walkabout' },
+  { row:13, time:'15:00', label:'Mid-Afternoon' },
   { row:16, time:'18:00', label:'Switch Off & Close' },
 ];
 
 const ZONE_STEPS = ['ac','room','hc','blinds'];
+// Steps depend on the round:
+//  Row 4  (Arrival & Setup)   -> ONE reading only: the AC start setting (no room temp)
+//  Row 16 (Switch Off & Close)-> ONE reading only: the AC setting before it is switched off
+//  All other rounds           -> AC setting + room temp, with an "Aircons switched off" option
+function getZoneSteps(){
+  if(sheetRow===4)  return ['ac','hc','blinds'];
+  if(sheetRow===16) return ['ac','hc','blinds'];
+  return ZONE_STEPS;
+}
 const MAINT_CATS = ['HVAC','Electrical','Plumbing','Cleaning','Structural','Safety','General'];
 const SHEET_ID   = '1eEtwpoUJVQWQ0WXqp-IAwA62qMQnCUHqVhbtZc6KhTw';
 
@@ -2545,7 +2554,7 @@ function init() {
 
 function showResumePrompt(){
   const zoneName = ZONES[zoneIdx]?.label || 'Unknown zone';
-  const stepName = {ac:'AC Setting',room:'Room Temp',hc:'Headcount',blinds:'Windows & Blinds'}[ZONE_STEPS[stepIdx]] || '';
+  const stepName = {ac:'AC Setting',room:'Room Temp',hc:'Headcount',blinds:'Windows & Blinds'}[getZoneSteps()[stepIdx]] || '';
   const visited  = Object.keys(data).length;
   document.getElementById('progressTrack').style.display='none';
   document.getElementById('wizardArea').innerHTML=`
@@ -2934,7 +2943,7 @@ function getSpecialSteps(row) {
   if (row===6)  return ['breakers','lights','toilets_blocked','toilet_seats'];
   if (row===7)  return ['lights'];
   if (row===8)  return ['lights','contractors_yn'];
-  if (row===11) return ['cleaning_yn'];
+  if (row===9)  return ['cleaning_yn'];
   if (row===13) return ['contractors_status'];
   return [];
 }
@@ -3249,13 +3258,13 @@ function renderZoneDots(){
 function updateProgress(){
   const totalZones = ZONES.length;
   const visitedCount = Object.keys(data).length;
-  const total = totalZones * ZONE_STEPS.length;
+  const total = totalZones * getZoneSteps().length;
   // Progress based on zones fully visited + current partial zone
-  const done = visitedCount * ZONE_STEPS.length + stepIdx;
+  const done = visitedCount * getZoneSteps().length + stepIdx;
   document.getElementById('pgFill').style.width = Math.round(Math.min(done,total)/total*100)+'%';
   document.getElementById('pgZoneName').textContent = ZONES[zoneIdx]?.label || 'Done';
   document.getElementById('pgCount').textContent    = `Zone ${visitedCount+1} / ${totalZones}`;
-  document.getElementById('pillStep').textContent   = `${ZONES[zoneIdx]?.floor||''} STEP ${stepIdx+1}/${ZONE_STEPS.length}`;
+  document.getElementById('pillStep').textContent   = `${ZONES[zoneIdx]?.floor||''} STEP ${stepIdx+1}/${getZoneSteps().length}`;
   renderZoneDots();
 }
 
@@ -3358,6 +3367,13 @@ function buildPhotoStep(type, label, hint, colRef, photoType, manualOnly=false){
         </button>
       </div>
     </div>` : ''}
+    ${isAC ? `
+    <button onclick="acSwitchedOff()"
+      style="width:100%;padding:13px 10px;margin-bottom:4px;border-radius:10px;
+      border:1.5px solid var(--yellow);background:transparent;color:var(--yellow);
+      font-family:var(--display);font-size:12px;letter-spacing:1px;cursor:pointer">
+      ❄️ AIRCONS SWITCHED OFF — NO TEMPERATURE
+    </button>` : ''}
     <div class="nav-row" style="margin-top:12px">
       <button class="back-btn" onclick="goBack()">&#8592; Back</button>
       <button class="next-btn" id="nextBtn" onclick="nextStep()" disabled>NEXT &#8594;</button>
@@ -3564,18 +3580,40 @@ function confirmBlinds(){
 // ═══════════════════════════════════════════════════════════
 function nextStep(){
   const zone=ZONES[zoneIdx];if(!data[zone.id])data[zone.id]={};
-  const step=ZONE_STEPS[stepIdx];
+  const step=getZoneSteps()[stepIdx];
   if(step==='ac'){
+    data[zone.id].acOff=false;
     data[zone.id].acTemp=tempAC;
     data[zone.id].mode=tempMode;
+    if(sheetRow===4||sheetRow===16){
+      // Startup / shutdown: single reading - the AC setting (start of day / before switch-off)
+      const ac=tempAC??'?';
+      const mode=tempMode?` ${tempMode}`:'';
+      data[zone.id].acNote=(sheetRow===4?'AC START ':'AC AT SHUTDOWN ')+ac+'\u00B0C'+mode;
+    }
   }
   if(step==='room'){
     data[zone.id].roomTemp=tempRoom;
+    data[zone.id].acOff=false;
     const ac=data[zone.id].acTemp??'?',rm=data[zone.id].roomTemp??'?';
     const mode=data[zone.id].mode?` ${data[zone.id].mode}`:'';
-    data[zone.id].acNote='AC SET '+ac+'°C'+mode+' | ROOM '+rm+'°C';
+    data[zone.id].acNote='AC SET '+ac+'\u00B0C'+mode+' | ROOM '+rm+'\u00B0C';
   }
   advance();
+}
+// Aircons are switched off in this zone, so no temperature can be recorded:
+// log it as such and jump straight to the headcount step.
+function acSwitchedOff(){
+  const zone=ZONES[zoneIdx];if(!data[zone.id])data[zone.id]={};
+  data[zone.id].acOff=true;
+  data[zone.id].acTemp=null;
+  data[zone.id].roomTemp=null;
+  data[zone.id].mode=null;
+  data[zone.id].acNote='AIRCONS OFF - NO TEMP';
+  const steps=getZoneSteps();
+  const hcIdx=steps.indexOf('hc');
+  const skips=Math.max(1,hcIdx-stepIdx);
+  for(let i=0;i<skips;i++) advance();
 }
 function skipStep(){advance();}
 
@@ -3598,7 +3636,7 @@ function advance(){
   pushHistory();
   saveSession();
   stepIdx++;
-  if(stepIdx>=ZONE_STEPS.length){
+  if(stepIdx>=getZoneSteps().length){
     const justDone=ZONES[zoneIdx];
     // Always ensure zone has a data entry so it registers as visited
     if(!data[justDone.id]) data[justDone.id]={};
@@ -3724,7 +3762,7 @@ function renderStep(){
   }
 
   const zone=ZONES[zoneIdx];
-  const step=ZONE_STEPS[stepIdx];
+  const step=getZoneSteps()[stepIdx];
   updateProgress();
 
   // Show wrap-around banner if we've looped back past index 0
@@ -3737,16 +3775,16 @@ function renderStep(){
       ↩ COMPLETING REMAINING ZONES — started at ${ZONES[startZoneIdx].label}
     </div>` : '';
 
-  const labels={ac:`Step ${stepIdx+1}/4 — AC Setting`,room:`Step ${stepIdx+1}/4 — Room Temp`,hc:`Step ${stepIdx+1}/4 — Headcount`,blinds:`Step ${stepIdx+1}/4 — Windows & Blinds`};
+  const nSteps=getZoneSteps().length;
+  const labels={ac:`Step ${stepIdx+1}/${nSteps} — ${sheetRow===4?'AC Start Setting':sheetRow===16?'AC Setting at Shutdown':'AC Setting'}`,room:`Step ${stepIdx+1}/${nSteps} — Room Temp`,hc:`Step ${stepIdx+1}/${nSteps} — Headcount`,blinds:`Step ${stepIdx+1}/${nSteps} — Windows & Blinds`};
   const hdr=`<div class="q-top"><span class="q-step-badge">${labels[step]}</span><span class="q-zone-tag">${zone.label.toUpperCase()}</span></div>`;
 
   let body='';
   if(step==='ac'){
     tempAC=null;
     tempMode=data[zone.id]?.mode||null;
-    const manualOnly=isRow16ACStep('ac');
-    const acLbl=manualOnly?'❄️ AC switched off — enter final reading if available':'📷 Take photo of the AC display';
-    body=buildPhotoStep('ac',acLbl,'Point camera at the AC control panel',`Column ${zone.cols.ac}, Row ${sheetRow}`,'ac',manualOnly);
+    const acLbl=sheetRow===4?'📷 AC start setting (photo of the AC display)':sheetRow===16?'📷 AC setting before switch-off (photo of the AC display)':'📷 Take photo of the AC display';
+    body=buildPhotoStep('ac',acLbl,'Point camera at the AC control panel',`Column ${zone.cols.ac}, Row ${sheetRow}`,'ac',false);
   }
   else if(step==='room'){
     tempRoom=null;
@@ -3757,9 +3795,9 @@ function renderStep(){
 
   document.getElementById('wizardArea').innerHTML=`<div class="q-card">${hdr}<div class="q-body">${wrapBanner}${body}</div></div>`;
 
-  if(step==='ac'&&data[zone.id]?.acTemp!==undefined)showPhotoResult('ac',data[zone.id].acTemp);
+  if(step==='ac'&&data[zone.id]?.acTemp!=null)showPhotoResult('ac',data[zone.id].acTemp);
   if(step==='ac'&&data[zone.id]?.mode){setTimeout(()=>selectMode(data[zone.id].mode),50);}
-  if(step==='room'&&data[zone.id]?.roomTemp!==undefined)showPhotoResult('room',data[zone.id].roomTemp);
+  if(step==='room'&&data[zone.id]?.roomTemp!=null)showPhotoResult('room',data[zone.id].roomTemp);
   if(step==='hc'&&data[zone.id]?.hc!==undefined){hcVal=data[zone.id].hc;const el=document.getElementById('hcNum');if(el)el.textContent=hcVal;const btn=document.querySelector('.next-btn');if(btn)btn.textContent='CONFIRM '+hcVal+' STAFF \u2192';}
   if(step==='blinds'&&data[zone.id]?.blindsStr){
     const saved=data[zone.id];
